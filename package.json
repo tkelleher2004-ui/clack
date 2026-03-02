@@ -1,26 +1,40 @@
 {
-  "name": "clack-temp",
+  "name": "clack",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy": "vercel --yes --name clack --token=$(grep '^VERCEL_TOKEN=' .env.local | cut -d '=' -f2- | tr -d '\\n\\r')",
+    "deploy:prod": "vercel --prod --yes --name clack --token=$(grep '^VERCEL_TOKEN=' .env.local | cut -d '=' -f2- | tr -d '\\n\\r')"
   },
   "dependencies": {
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.47.0",
+    "framer-motion": "^11.11.0",
+    "inngest": "^3.52.3",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-dropzone": "^14.2.9",
+    "react-markdown": "^10.1.0",
+    "recharts": "^2.13.3",
+    "remark-gfm": "^4.0.1",
+    "sonner": "^1.7.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "^15.1.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vercel": "^39.0.0"
   }
 }

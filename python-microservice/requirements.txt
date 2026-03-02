@@ -1,0 +1,4 @@
+openai
+ffmpeg-python
+Flask
+requests

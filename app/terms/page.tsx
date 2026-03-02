@@ -69,7 +69,7 @@ export default function TermsPage() {
             <ul className="mt-3 space-y-2 text-sm leading-relaxed" style={{ color: "#A1A1AA" }}>
               <Li>Provide accurate and complete registration information.</Li>
               <Li>Keep your login credentials confidential and not share them with others.</Li>
-              <Li>Notify us immediately at <a href="mailto:support@clack.app" style={{ color: "#A78BFA" }}>support@clack.app</a> if you suspect unauthorized access to your account.</Li>
+              <Li>Notify us immediately at <a href="mailto:cyntaxai@gmail.com" style={{ color: "#A78BFA" }}>cyntaxai@gmail.com</a> if you suspect unauthorized access to your account.</Li>
               <Li>Be responsible for all activity that occurs under your account.</Li>
             </ul>
           </Section>
@@ -148,7 +148,7 @@ export default function TermsPage() {
           <Section title="9. Termination">
             <P>
               You may close your account at any time from the Settings page or by contacting{" "}
-              <a href="mailto:support@clack.app" style={{ color: "#A78BFA" }}>support@clack.app</a>.
+              <a href="mailto:cyntaxai@gmail.com" style={{ color: "#A78BFA" }}>cyntaxai@gmail.com</a>.
             </P>
             <P className="mt-3">
               We reserve the right to suspend or terminate your account without notice if you
@@ -221,8 +221,8 @@ export default function TermsPage() {
               <p style={{ color: "#E4E4E7" }} className="font-medium">Clack</p>
               <p className="mt-1">
                 Email:{" "}
-                <a href="mailto:legal@clack.app" style={{ color: "#A78BFA" }}>
-                  legal@clack.app
+                <a href="mailto:cyntaxai@gmail.com" style={{ color: "#A78BFA" }}>
+                  cyntaxai@gmail.com
                 </a>
               </p>
             </div>

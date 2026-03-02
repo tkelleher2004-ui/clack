@@ -3,7 +3,9 @@
 This guide walks you through creating OAuth apps for each platform so users can connect their social accounts.
 
 **Base URL for local dev:** `http://localhost:3000`  
-**Base URL for production:** Your deployed URL (e.g. `https://clack.app`)
+**Base URL for production:** Your deployed URL (e.g. `https://useclack.com`)
+
+OAuth redirects automatically use the request origin, so they work on useclack.com and any deployment URL without extra config. In Vercel, add your platform credentials (TIKTOK_CLIENT_KEY, META_APP_ID, etc.) to **Project → Settings → Environment Variables**.
 
 ---
 

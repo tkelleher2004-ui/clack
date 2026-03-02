@@ -1,7 +1,23 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// TikTok domain verification: serve any tiktok*.txt file dynamically (root or under /terms, /privacy, etc.)
+const TIKTOK_VERIFY_REGEX = /^\/(?:terms\/|privacy\/)?tiktok([a-zA-Z0-9]+)\.txt\/?$/;
+const TIKTOK_VERIFICATION_PREFIX = "tiktok-developers-site-verification=";
+
 export async function middleware(request: NextRequest) {
+  // Handle TikTok verification files (supports any tiktok*.txt TikTok provides)
+  const match = request.nextUrl.pathname.match(TIKTOK_VERIFY_REGEX);
+  if (match) {
+    const code = match[1];
+    return new NextResponse(`${TIKTOK_VERIFICATION_PREFIX}${code}`, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      },
+    });
+  }
+
   let response = NextResponse.next({
     request: { headers: request.headers },
   });
@@ -85,6 +101,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // TikTok verification + app routes
     "/((?!_next/static|_next/image|favicon.ico|api/waitlist|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

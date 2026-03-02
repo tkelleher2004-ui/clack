@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decodeOAuthState } from "@/lib/auth/oauth-state";
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-const ACCOUNTS_URL = `${BASE_URL}/dashboard/accounts`;
+function getAccountsUrl(origin: string) {
+  return `${origin}/dashboard/accounts`;
+}
 
 export async function GET(request: NextRequest) {
+  const origin = request.nextUrl.origin;
+  const accountsUrl = getAccountsUrl(origin);
   const { searchParams } = request.nextUrl;
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -13,32 +16,32 @@ export async function GET(request: NextRequest) {
 
   // User denied the OAuth dialog
   if (errorParam) {
-    return NextResponse.redirect(`${ACCOUNTS_URL}?error=auth_failed`);
+    return NextResponse.redirect(`${accountsUrl}?error=auth_failed`);
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${ACCOUNTS_URL}?error=auth_failed`);
+    return NextResponse.redirect(`${accountsUrl}?error=auth_failed`);
   }
 
   // CSRF check: compare URL state param against the httpOnly cookie we set
   const cookieState = request.cookies.get("ig_oauth_state")?.value;
   if (!cookieState || cookieState !== state) {
-    return NextResponse.redirect(`${ACCOUNTS_URL}?error=invalid_state`);
+    return NextResponse.redirect(`${accountsUrl}?error=invalid_state`);
   }
 
   // Verify the HMAC signature and TTL inside the state
   const decoded = decodeOAuthState(state);
   if (!decoded || decoded.platform !== "instagram") {
-    return NextResponse.redirect(`${ACCOUNTS_URL}?error=invalid_state`);
+    return NextResponse.redirect(`${accountsUrl}?error=invalid_state`);
   }
 
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
   if (!appId || !appSecret) {
-    return NextResponse.redirect(`${ACCOUNTS_URL}?error=config`);
+    return NextResponse.redirect(`${accountsUrl}?error=config`);
   }
 
-  const baseUrl = request.nextUrl.origin;
+  const baseUrl = origin;
   const redirectUri = `${baseUrl}/api/auth/instagram/callback`;
 
   try {
@@ -57,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     if (!tokenData.access_token || tokenData.error) {
       console.error("[instagram/callback] Token exchange failed:", tokenData.error);
-      return NextResponse.redirect(`${ACCOUNTS_URL}?error=token_exchange`);
+      return NextResponse.redirect(`${accountsUrl}?error=token_exchange`);
     }
 
     // ── Step 2: Exchange for a long-lived token (~60 days) ────────────────────
@@ -76,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     if (!longLivedData.access_token || longLivedData.error) {
       console.error("[instagram/callback] Long-lived token failed:", longLivedData.error);
-      return NextResponse.redirect(`${ACCOUNTS_URL}?error=long_lived_token`);
+      return NextResponse.redirect(`${accountsUrl}?error=long_lived_token`);
     }
 
     const userAccessToken = longLivedData.access_token;
@@ -102,7 +105,7 @@ export async function GET(request: NextRequest) {
 
     if (pagesData.error || !pagesData.data?.length) {
       console.error("[instagram/callback] Pages fetch failed:", pagesData.error);
-      return NextResponse.redirect(`${ACCOUNTS_URL}?error=no_pages`);
+      return NextResponse.redirect(`${accountsUrl}?error=no_pages`);
     }
 
     // ── Step 4: Find the page connected to an Instagram Business Account ──────
@@ -121,7 +124,7 @@ export async function GET(request: NextRequest) {
 
     if (!igAccountId || !pageAccessToken) {
       console.error("[instagram/callback] No Instagram Business Account found on any page.");
-      return NextResponse.redirect(`${ACCOUNTS_URL}?error=no_ig_business`);
+      return NextResponse.redirect(`${accountsUrl}?error=no_ig_business`);
     }
 
     // ── Step 5: Fetch Instagram account details ───────────────────────────────
@@ -147,7 +150,7 @@ export async function GET(request: NextRequest) {
 
     if (igData.error) {
       console.error("[instagram/callback] IG account fetch failed:", igData.error);
-      return NextResponse.redirect(`${ACCOUNTS_URL}?error=token_exchange`);
+      return NextResponse.redirect(`${accountsUrl}?error=token_exchange`);
     }
 
     // ── Step 6: Upsert into social_accounts ───────────────────────────────────
@@ -161,7 +164,7 @@ export async function GET(request: NextRequest) {
     const userId = user?.id ?? decoded.userId;
 
     if (!userId) {
-      return NextResponse.redirect(`${BASE_URL}/login?error=session_expired`);
+      return NextResponse.redirect(`${origin}/login?error=session_expired`);
     }
 
     const { error: upsertError } = await supabase.from("social_accounts").upsert(
@@ -192,7 +195,7 @@ export async function GET(request: NextRequest) {
 
     if (upsertError) {
       console.error("[instagram/callback] Supabase upsert failed:", upsertError);
-      return NextResponse.redirect(`${ACCOUNTS_URL}?error=save_failed`);
+      return NextResponse.redirect(`${accountsUrl}?error=save_failed`);
     }
 
     // Log the connection (best-effort, non-blocking)
@@ -213,7 +216,7 @@ export async function GET(request: NextRequest) {
       );
 
     // Clear the CSRF cookie and redirect to success
-    const redirectResponse = NextResponse.redirect(`${ACCOUNTS_URL}?success=instagram`);
+    const redirectResponse = NextResponse.redirect(`${accountsUrl}?success=instagram`);
     redirectResponse.cookies.set("ig_oauth_state", "", {
       maxAge: 0,
       path: "/",
@@ -221,6 +224,6 @@ export async function GET(request: NextRequest) {
     return redirectResponse;
   } catch (err) {
     console.error("[instagram/callback] Unhandled error:", err);
-    return NextResponse.redirect(`${ACCOUNTS_URL}?error=unknown`);
+    return NextResponse.redirect(`${accountsUrl}?error=unknown`);
   }
 }

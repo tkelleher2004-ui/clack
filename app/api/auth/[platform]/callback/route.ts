@@ -3,10 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 import { decodeOAuthState } from "@/lib/auth/oauth-state";
 import { encryptTokens } from "@/lib/crypto/tokens";
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-const accountsUrl = `${baseUrl}/dashboard/accounts`;
+function getBaseUrlFromRequest(request: NextRequest): string {
+  return request.nextUrl.origin;
+}
 
-async function handleYouTubeCallback(code: string, state: string) {
+async function handleYouTubeCallback(
+  code: string,
+  state: string,
+  origin: string
+) {
+  const accountsUrl = `${origin}/dashboard/accounts`;
+  const baseUrl = origin;
   const decoded = decodeOAuthState(state);
   if (!decoded || decoded.platform !== "youtube") {
     return NextResponse.redirect(`${accountsUrl}?error=invalid_state`);
@@ -113,7 +120,13 @@ async function handleYouTubeCallback(code: string, state: string) {
   return NextResponse.redirect(`${accountsUrl}?connected=youtube`);
 }
 
-async function handleInstagramCallback(code: string, state: string) {
+async function handleInstagramCallback(
+  code: string,
+  state: string,
+  origin: string
+) {
+  const accountsUrl = `${origin}/dashboard/accounts`;
+  const baseUrl = origin;
   const decoded = decodeOAuthState(state);
   if (!decoded || decoded.platform !== "instagram") {
     return NextResponse.redirect(`${accountsUrl}?error=invalid_state`);
@@ -284,7 +297,13 @@ async function handleInstagramCallback(code: string, state: string) {
   }
 }
 
-async function handleTikTokCallback(code: string, state: string) {
+async function handleTikTokCallback(
+  code: string,
+  state: string,
+  origin: string
+) {
+  const accountsUrl = `${origin}/dashboard/accounts`;
+  const baseUrl = origin;
   const decoded = decodeOAuthState(state);
   if (!decoded || decoded.platform !== "tiktok") {
     return NextResponse.redirect(`${accountsUrl}?error=invalid_state`);
@@ -404,7 +423,13 @@ async function handleTikTokCallback(code: string, state: string) {
   return NextResponse.redirect(`${accountsUrl}?connected=tiktok`);
 }
 
-async function handleLinkedInCallback(code: string, state: string) {
+async function handleLinkedInCallback(
+  code: string,
+  state: string,
+  origin: string
+) {
+  const accountsUrl = `${origin}/dashboard/accounts`;
+  const baseUrl = origin;
   const decoded = decodeOAuthState(state);
   if (!decoded || decoded.platform !== "linkedin") {
     return NextResponse.redirect(`${accountsUrl}?error=invalid_state`);
@@ -498,7 +523,13 @@ async function handleLinkedInCallback(code: string, state: string) {
   return NextResponse.redirect(`${accountsUrl}?connected=linkedin`);
 }
 
-async function handleTwitterCallback(code: string, state: string) {
+async function handleTwitterCallback(
+  code: string,
+  state: string,
+  origin: string
+) {
+  const accountsUrl = `${origin}/dashboard/accounts`;
+  const baseUrl = origin;
   const decoded = decodeOAuthState(state);
   if (!decoded || decoded.platform !== "twitter") {
     return NextResponse.redirect(`${accountsUrl}?error=invalid_state`);
@@ -612,7 +643,13 @@ async function handleTwitterCallback(code: string, state: string) {
   return NextResponse.redirect(`${accountsUrl}?connected=twitter`);
 }
 
-async function handleFacebookCallback(code: string, state: string) {
+async function handleFacebookCallback(
+  code: string,
+  state: string,
+  origin: string
+) {
+  const accountsUrl = `${origin}/dashboard/accounts`;
+  const baseUrl = origin;
   const decoded = decodeOAuthState(state);
   if (!decoded || decoded.platform !== "facebook") {
     return NextResponse.redirect(`${accountsUrl}?error=invalid_state`);
@@ -741,6 +778,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ platform: string }> }
 ) {
+  const origin = getBaseUrlFromRequest(request);
+  const accountsUrl = `${origin}/dashboard/accounts`;
+
   const { platform } = await params;
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
@@ -757,27 +797,27 @@ export async function GET(
   }
 
   if (platform === "youtube") {
-    return handleYouTubeCallback(code, state);
+    return handleYouTubeCallback(code, state, origin);
   }
 
   if (platform === "instagram") {
-    return handleInstagramCallback(code, state);
+    return handleInstagramCallback(code, state, origin);
   }
 
   if (platform === "tiktok") {
-    return handleTikTokCallback(code, state);
+    return handleTikTokCallback(code, state, origin);
   }
 
   if (platform === "linkedin") {
-    return handleLinkedInCallback(code, state);
+    return handleLinkedInCallback(code, state, origin);
   }
 
   if (platform === "twitter") {
-    return handleTwitterCallback(code, state);
+    return handleTwitterCallback(code, state, origin);
   }
 
   if (platform === "facebook") {
-    return handleFacebookCallback(code, state);
+    return handleFacebookCallback(code, state, origin);
   }
 
   return NextResponse.redirect(`${accountsUrl}?error=unsupported`);

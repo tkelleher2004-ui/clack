@@ -14,7 +14,9 @@ export interface SocialAccountAccountData {
   followers_count?: number;
   follows_count?: number;
   media_count?: number;
+  video_count?: number;
   profile_picture_url?: string;
+  avatar_url?: string;
   page_name?: string;
 }
 

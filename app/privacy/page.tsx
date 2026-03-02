@@ -88,7 +88,7 @@ export default function PrivacyPage() {
             </P>
             <P className="mt-3">
               You may request deletion of all your data at any time by contacting us at{" "}
-              <a href="mailto:privacy@clack.app" style={{ color: "#A78BFA" }}>privacy@clack.app</a>.
+              <a href="mailto:cyntaxai@gmail.com" style={{ color: "#A78BFA" }}>cyntaxai@gmail.com</a>.
               We will process your request within 30 days.
             </P>
           </Section>
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
             </ul>
             <P className="mt-4">
               To exercise any of these rights, contact us at{" "}
-              <a href="mailto:privacy@clack.app" style={{ color: "#A78BFA" }}>privacy@clack.app</a>.
+              <a href="mailto:cyntaxai@gmail.com" style={{ color: "#A78BFA" }}>cyntaxai@gmail.com</a>.
             </P>
           </Section>
 
@@ -158,8 +158,8 @@ export default function PrivacyPage() {
               <p style={{ color: "#E4E4E7" }} className="font-medium">Clack</p>
               <p className="mt-1">
                 Email:{" "}
-                <a href="mailto:privacy@clack.app" style={{ color: "#A78BFA" }}>
-                  privacy@clack.app
+                <a href="mailto:cyntaxai@gmail.com" style={{ color: "#A78BFA" }}>
+                  cyntaxai@gmail.com
                 </a>
               </p>
             </div>

@@ -10,11 +10,11 @@ import { PLATFORM_CONFIG } from "@/lib/types/social";
 import { toast } from "sonner";
 
 const PLATFORMS: SocialPlatform[] = ["instagram", "tiktok", "youtube", "linkedin", "twitter"];
-const CONNECTABLE_PLATFORMS: SocialPlatform[] = ["instagram"];
+const CONNECTABLE_PLATFORMS: SocialPlatform[] = ["instagram", "tiktok"];
 
 const ERROR_MESSAGES: Record<string, string> = {
   auth_failed: "Authentication was cancelled or failed. Please try again.",
-  token_exchange: "Failed to authenticate with Instagram. Please try again.",
+  token_exchange: "Failed to authenticate. Please try again.",
   long_lived_token: "Failed to get a long-term connection. Please try again.",
   no_pages:
     "No Facebook Page found. You need a Facebook Page linked to an Instagram Business or Creator account.",
@@ -77,11 +77,15 @@ function formatLastSynced(iso: string | null): string {
 function getAccountDisplay(account: SocialAccount) {
   const username = account.username ?? account.account_name ?? "Unknown";
   const avatar =
-    account.account_data?.profile_picture_url ?? account.account_avatar_url ?? null;
+    account.account_data?.profile_picture_url ??
+    account.account_data?.avatar_url ??
+    account.account_avatar_url ??
+    null;
   const followers =
     account.account_data?.followers_count ?? account.follower_count ?? 0;
+  const videoCount = account.account_data?.video_count ?? 0;
   const lastSynced = account.last_synced_at ?? null;
-  return { username, avatar, followers, lastSynced };
+  return { username, avatar, followers, videoCount, lastSynced };
 }
 
 function InstagramSVG() {
@@ -125,6 +129,10 @@ function AccountsPageContent() {
       toast.success("Instagram connected! Syncing your data...");
       window.history.replaceState({}, "", "/dashboard/accounts");
       router.replace("/dashboard/chat?welcome=instagram");
+    }
+    if (success === "tiktok") {
+      toast.success("TikTok connected!");
+      window.history.replaceState({}, "", "/dashboard/accounts");
     }
     if (error) {
       toast.error(ERROR_MESSAGES[error] ?? ERROR_MESSAGES.unknown);
@@ -171,9 +179,15 @@ function AccountsPageContent() {
   };
 
   const handleSyncNow = async (accountId: string, platform: SocialPlatform) => {
-    if (platform !== "instagram") return;
+    const endpoint =
+      platform === "instagram"
+        ? "/api/instagram/sync"
+        : platform === "tiktok"
+          ? "/api/tiktok/sync"
+          : null;
+    if (!endpoint) return;
     setSyncing((p) => ({ ...p, [accountId]: true }));
-    const res = await fetch("/api/instagram/sync", {
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ social_account_id: accountId }),
@@ -186,7 +200,9 @@ function AccountsPageContent() {
     }
     toast.success("Sync completed");
     fetchAccounts();
-    router.push("/dashboard/chat?welcome=instagram");
+    if (platform === "instagram") {
+      router.push("/dashboard/chat?welcome=instagram");
+    }
   };
 
   const getAccountForPlatform = (platform: SocialPlatform) =>
@@ -280,6 +296,11 @@ function AccountsPageContent() {
                           {display.followers > 0 && (
                             <span style={{ color: "#6B6B80" }}>
                               {" · "}{formatFollowerCount(display.followers)} followers
+                            </span>
+                          )}
+                          {platform === "tiktok" && display.videoCount > 0 && (
+                            <span style={{ color: "#6B6B80" }}>
+                              {" · "}{formatFollowerCount(display.videoCount)} videos
                             </span>
                           )}
                         </p>

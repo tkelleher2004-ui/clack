@@ -171,7 +171,7 @@ export function HomePageClient() {
   const typedMessage = useTyping(AI_MESSAGE, mockInView, 1000);
 
   return (
-    <div style={{ background: "#0A0A0A", minHeight: "100vh" }}>
+    <div className="w-full min-w-0 overflow-x-hidden" style={{ background: "#0A0A0A", minHeight: "100vh" }}>
 
       {/* ── Navbar ── */}
       <nav
@@ -278,14 +278,15 @@ export function HomePageClient() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="relative flex flex-col justify-start pt-12 sm:pt-20 lg:pt-24 pb-8 sm:pb-10 px-4 sm:px-6 lg:px-8 overflow-hidden">
+      <section className="relative flex flex-col justify-start pt-16 sm:pt-20 lg:pt-28 pb-20 sm:pb-16 md:pb-10 px-4 sm:px-6 lg:px-8 overflow-hidden">
         <div
-          className="absolute left-1/2 top-0 -translate-x-1/2 pointer-events-none"
+          className="absolute left-1/2 top-0 -translate-x-1/2 pointer-events-none w-full max-w-[900px] z-0"
           style={{
-            width: 900,
-            height: 480,
-            background: "radial-gradient(ellipse at 50% 0%, rgba(124,92,252,0.08) 0%, transparent 65%)",
-            filter: "blur(40px)",
+            height: 520,
+            /* iOS: "transparent" causes artifacts - use rgba(0,0,0,0) */
+            background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(124,92,252,0.18) 0%, rgba(124,92,252,0.06) 45%, rgba(0,0,0,0) 70%)",
+            filter: "blur(28px)",
+            WebkitBackfaceVisibility: "hidden",
           }}
         />
         <motion.div
@@ -295,12 +296,12 @@ export function HomePageClient() {
           variants={stagger}
         >
           <motion.div
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-6 sm:mb-8"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-8 sm:mb-10"
             style={{
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(255,255,255,0.09)",
               color: "#71717A",
-              animation: "pill-pulse 2s ease-in-out infinite",
+              animation: "pill-pulse 2.5s ease-in-out infinite",
             }}
             variants={fadeUp}
             transition={{ duration: 0.4 }}
@@ -309,26 +310,26 @@ export function HomePageClient() {
               className="w-1.5 h-1.5 rounded-full shrink-0"
               style={{
                 background: "#10B981",
-                animation: "dot-flash 2s ease-in-out infinite",
+                animation: "dot-flash 2.5s ease-in-out infinite",
               }}
             />
             Now in private beta
           </motion.div>
 
           <motion.h1
-            className="text-4xl min-[480px]:text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[1.1] sm:leading-none"
+            className="text-[2.75rem] min-[380px]:text-[3rem] min-[480px]:text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[1.2] sm:leading-none"
             variants={fadeUp}
             transition={{ duration: 0.5 }}
           >
-            <span className="bg-gradient-to-r from-white via-zinc-300 to-zinc-500 bg-clip-text text-transparent">
-              Know exactly what
+            <span className="bg-gradient-to-r from-white via-zinc-200 to-zinc-400 gradient-text">
+              Know exactly what to{" "}
             </span>
-            <br />
-            <span className="text-white">to post next</span>
+            <br className="hidden sm:block" />
+            <span className="text-white">post next</span>
           </motion.h1>
 
           <motion.p
-            className="text-base sm:text-lg md:text-xl text-zinc-400 max-w-2xl mx-auto mt-4 sm:mt-6 px-1 leading-relaxed"
+            className="text-base sm:text-lg md:text-xl text-zinc-400 max-w-2xl mx-auto mt-8 sm:mt-10 px-1 leading-[1.65] sm:leading-relaxed"
             variants={fadeUp}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
@@ -337,7 +338,7 @@ export function HomePageClient() {
           </motion.p>
 
           <motion.div
-            className="mt-8 sm:mt-10 flex flex-col items-center gap-3 w-full max-w-sm mx-auto px-2 sm:px-0"
+            className="mt-10 sm:mt-12 flex flex-col items-center gap-4 w-full max-w-sm mx-auto px-2 sm:px-0"
             variants={fadeUp}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
@@ -350,7 +351,17 @@ export function HomePageClient() {
       </section>
 
       {/* ── Animated Product Mock ── */}
-      <section ref={mockRef} className="px-4 sm:px-6 lg:px-8 pb-12 sm:pb-20">
+      <section
+        ref={mockRef}
+        className="px-4 sm:px-6 lg:px-8 pt-12 sm:pt-0 pb-16 sm:pb-20"
+        style={{
+          borderTop: "1px solid rgba(255,255,255,0.04)",
+          background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.08) 5%, rgba(0,0,0,0) 15%)",
+        }}
+      >
+        <p className="hidden sm:block text-center text-xs uppercase tracking-[0.2em] mb-8 sm:mb-10 opacity-50" style={{ color: "#6B6B80" }}>
+          See it in action
+        </p>
         <motion.div
           className="max-w-5xl mx-auto"
           initial={{ opacity: 0, y: 36 }}
@@ -363,7 +374,7 @@ export function HomePageClient() {
             style={{
               width: "80%",
               height: 400,
-              background: "radial-gradient(ellipse, rgba(124,92,252,0.07) 0%, transparent 70%)",
+              background: "radial-gradient(ellipse, rgba(124,92,252,0.07) 0%, rgba(0,0,0,0) 70%)",
               filter: "blur(60px)",
               zIndex: 0,
             }}
@@ -1104,11 +1115,10 @@ export function HomePageClient() {
           transition={{ duration: 0.5 }}
         >
           <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none w-full max-w-[700px]"
             style={{
-              width: 700,
               height: 350,
-              background: "radial-gradient(ellipse, rgba(124,92,252,0.06) 0%, transparent 70%)",
+              background: "radial-gradient(ellipse, rgba(124,92,252,0.06) 0%, rgba(0,0,0,0) 70%)",
               filter: "blur(60px)",
             }}
           />
@@ -1136,7 +1146,7 @@ export function HomePageClient() {
           <div className="flex gap-6">
             <Link href="/privacy" className="text-sm transition-opacity hover:opacity-80" style={{ color: "#52525B" }}>Privacy</Link>
             <Link href="/terms" className="text-sm transition-opacity hover:opacity-80" style={{ color: "#52525B" }}>Terms</Link>
-            <a href="mailto:hello@clack.app" className="text-sm transition-opacity hover:opacity-80" style={{ color: "#52525B" }}>Contact</a>
+            <a href="mailto:cyntaxai@gmail.com" className="text-sm transition-opacity hover:opacity-80" style={{ color: "#52525B" }}>Contact</a>
           </div>
         </div>
         <p className="text-center text-xs mt-6" style={{ color: "#3F3F46" }}>

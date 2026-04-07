@@ -118,7 +118,7 @@ export function GlassButton({
   };
 
   if (href && !disabled && !loading) {
-    const { href: _h, ...linkProps } = props as React.ComponentProps<typeof Link> & { href?: string };
+    const { href: _, ...linkProps } = props as React.ComponentProps<typeof Link> & { href?: string };
     return (
       <Link
         href={href}

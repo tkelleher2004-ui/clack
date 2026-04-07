@@ -22,7 +22,7 @@ type Message = {
   content: string;
 };
 
-interface ChatSidebarProps {}
+type ChatSidebarProps = Record<string, never>;
 
 function ArrowUpIcon({ className }: { className?: string }) {
   return (

@@ -109,7 +109,7 @@ function ContentIdeaCard({ data }: { data: ContentIdea }) {
             Hook
           </p>
           <p className="text-[12px] italic" style={{ color: "#C4C4D4" }}>
-            "{data.hook}"
+            &quot;{data.hook}&quot;
           </p>
         </div>
       )}

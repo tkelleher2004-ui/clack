@@ -168,3 +168,49 @@ Rules:
     return NextResponse.json({ error: "Failed to generate analysis" }, { status: 500 });
   }
 }
+
+/** PATCH — Update parts of the cached overview analysis (e.g. calendar edits) */
+export async function PATCH(req: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  let body: { weeklyCalendar?: unknown[]; simulatedIdeas?: unknown[] };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Get current cached analysis
+  const { data: existing } = await supabase
+    .from("ai_artifacts")
+    .select("id, data")
+    .eq("user_id", user.id)
+    .eq("type", "overview_analysis")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const prev = (existing?.data ?? {}) as Record<string, unknown>;
+  const merged = { ...prev };
+  if (body.weeklyCalendar) merged.weeklyCalendar = body.weeklyCalendar;
+  if (body.simulatedIdeas) merged.simulatedIdeas = body.simulatedIdeas;
+
+  if (existing?.id) {
+    await supabase
+      .from("ai_artifacts")
+      .update({ data: merged })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("ai_artifacts").insert({
+      user_id: user.id,
+      type: "overview_analysis",
+      title: "Overview Analysis",
+      data: merged,
+      pinned: false,
+    });
+  }
+
+  return NextResponse.json({ ok: true });
+}

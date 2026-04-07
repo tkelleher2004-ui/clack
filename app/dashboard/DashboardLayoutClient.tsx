@@ -8,6 +8,7 @@ import { signOut } from "@/lib/auth/actions";
 import { UserGoalProvider } from "@/lib/context/UserGoalContext";
 import { ChatSidebar } from "@/components/dashboard/ChatSidebar";
 import { SyncIndicator } from "@/components/dashboard/SyncIndicator";
+import { GoalBar } from "@/components/dashboard/GoalBar";
 
 export interface PinnedArtifact {
   id: string;
@@ -340,6 +341,9 @@ export function DashboardLayoutClient({
               <SyncIndicator />
             </div>
           </div>
+
+          {/* Goal bar */}
+          <GoalBar />
 
           {/* Page content */}
           <main className="flex-1 overflow-auto relative">

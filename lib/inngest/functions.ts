@@ -5,6 +5,7 @@ import { ingestTikTok } from "@/lib/social/ingest-tiktok";
 import { ingestLinkedIn } from "@/lib/social/ingest-linkedin";
 import { ingestTwitter } from "@/lib/social/ingest-twitter";
 import { ingestFacebook } from "@/lib/social/ingest-facebook";
+import { matchPostedIdeas } from "@/lib/ideas/auto-match";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -26,7 +27,7 @@ export const syncSocialAccount = inngest.createFunction(
 
     const { data: account } = await supabase
       .from("social_accounts")
-      .select("platform")
+      .select("platform, user_id")
       .eq("id", accountId)
       .single();
 
@@ -48,6 +49,13 @@ export const syncSocialAccount = inngest.createFunction(
       await ingestFacebook(accountId);
     } else {
       throw new Error(`Platform ${account.platform} not yet supported`);
+    }
+
+    // After sync, try to auto-match posted ideas to new posts
+    try {
+      await matchPostedIdeas(account.user_id);
+    } catch (err) {
+      console.error("[sync] auto-match error (non-fatal):", err);
     }
   }
 );

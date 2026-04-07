@@ -28,6 +28,8 @@ const ARTIFACT_TYPE_COLORS: Record<string, string> = {
 
 const NAV_ITEMS = [
   { href: "/dashboard/overview", label: "Dashboard", icon: "grid" },
+  { href: "/dashboard/analytics", label: "Analytics", icon: "chart" },
+  { href: "/dashboard/calendar", label: "Calendar", icon: "calendar" },
   { href: "/dashboard/accounts", label: "Accounts", icon: "link" },
   { href: "/dashboard/settings", label: "Settings", icon: "gear" },
 ];
@@ -55,6 +57,18 @@ function NavIcon({ name }: { name: string }) {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
       </svg>
     );
+  if (name === "chart")
+    return (
+      <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    );
+  if (name === "calendar")
+    return (
+      <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    );
   if (name === "gear")
     return (
       <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -80,6 +94,7 @@ export function DashboardLayoutClient({
   const [expanded, setExpanded] = useState(false);
   const [user, setUser] = useState<{ email?: string } | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -308,8 +323,22 @@ export function DashboardLayoutClient({
             </button>
             <div className="hidden md:block" />
 
-            {/* Sync indicator in the top bar */}
-            <SyncIndicator />
+            <div className="flex items-center gap-2">
+              {/* Mobile chat toggle */}
+              <button
+                type="button"
+                className="md:hidden p-1.5 rounded-lg"
+                style={{ color: "#A78BFA", background: "rgba(124,92,252,0.12)" }}
+                onClick={() => setMobileChatOpen(true)}
+                aria-label="Open AI chat"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+              </button>
+              {/* Sync indicator in the top bar */}
+              <SyncIndicator />
+            </div>
           </div>
 
           {/* Page content */}
@@ -318,8 +347,23 @@ export function DashboardLayoutClient({
           </main>
         </div>
 
-        {/* Persistent AI chat panel — only on Dashboard (overview) */}
-        {pathname.startsWith("/dashboard/overview") && <ChatSidebar />}
+        {/* Persistent AI chat panel — sidebar on desktop, overlay on mobile */}
+        <div className="hidden md:flex" style={{ width: "40vw", minWidth: "40vw" }}>
+          <ChatSidebar />
+        </div>
+        {mobileChatOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-50 md:hidden"
+              style={{ background: "rgba(0,0,0,0.5)" }}
+              onClick={() => setMobileChatOpen(false)}
+              aria-hidden
+            />
+            <div className="fixed inset-0 z-50 md:hidden">
+              <ChatSidebar onClose={() => setMobileChatOpen(false)} />
+            </div>
+          </>
+        )}
       </div>
     </UserGoalProvider>
   );

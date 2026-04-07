@@ -352,7 +352,20 @@ export interface ChatContextData {
   };
 }
 
-export async function getChatContext(userId: string): Promise<ChatContextData> {
+/**
+ * Score how relevant a post is to a query using keyword overlap.
+ * Returns 0-1 score. Used to send contextually relevant posts to the AI.
+ */
+function relevanceScore(caption: string, query: string): number {
+  if (!query || !caption) return 0;
+  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  const capLower = caption.toLowerCase();
+  if (queryWords.length === 0) return 0;
+  const matches = queryWords.filter(w => capLower.includes(w)).length;
+  return matches / queryWords.length;
+}
+
+export async function getChatContext(userId: string, latestUserMessage?: string): Promise<ChatContextData> {
   const supabase = await createClient();
 
   const [{ data: accounts }, { data: posts }, { data: cachedAnalysis }, { data: goalArtifact }, { data: postedIdeaRows }] =
@@ -441,9 +454,28 @@ export async function getChatContext(userId: string): Promise<ChatContextData> {
     };
   });
 
-  // Top 20 by views
-  const sorted = [...postRows].sort((a, b) => b.views - a.views);
-  const top20Posts = sorted.slice(0, 20).map((p, i) => ({ rank: i + 1, ...p }));
+  // Smart post selection: top by views + topic-relevant posts if a message is provided
+  let top20Posts: Array<{ rank: number } & (typeof postRows)[number]>;
+  if (latestUserMessage && postRows.length > 20) {
+    // Score all posts for relevance to the user's latest message
+    const scored = postRows.map(p => ({
+      ...p,
+      relevance: relevanceScore(p.caption, latestUserMessage),
+    }));
+    // Take top 10 by views (always include best performers)
+    const byViews = [...scored].sort((a, b) => b.views - a.views).slice(0, 10);
+    const byViewsSet = new Set(byViews.map(p => p.caption));
+    // Take top 10 by relevance that aren't already included
+    const byRelevance = [...scored]
+      .filter(p => p.relevance > 0 && !byViewsSet.has(p.caption))
+      .sort((a, b) => b.relevance - a.relevance || b.views - a.views)
+      .slice(0, 10);
+    const combined = [...byViews, ...byRelevance];
+    top20Posts = combined.slice(0, 20).map((p, i) => ({ rank: i + 1, ...p }));
+  } else {
+    const sorted = [...postRows].sort((a, b) => b.views - a.views);
+    top20Posts = sorted.slice(0, 20).map((p, i) => ({ rank: i + 1, ...p }));
+  }
 
   // Pattern evidence
   const formatGroups: Record<string, number[]> = {};

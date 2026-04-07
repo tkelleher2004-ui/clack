@@ -185,10 +185,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "messages array is required" }, { status: 400 });
   }
 
-  // Fetch full context server-side
+  // Fetch full context server-side, passing latest user message for relevance scoring
+  const latestUserMsg = [...messages].reverse().find(m => m.role === "user")?.content;
   let ctx: Awaited<ReturnType<typeof getChatContext>>;
   try {
-    ctx = await getChatContext(user.id);
+    ctx = await getChatContext(user.id, latestUserMsg);
   } catch (err) {
     console.error("[chat] getChatContext error:", err);
     // Fallback to empty context rather than failing the request

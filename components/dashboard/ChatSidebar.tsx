@@ -29,7 +29,9 @@ type ConversationSummary = {
   message_count: number;
 };
 
-type ChatSidebarProps = Record<string, never>;
+type ChatSidebarProps = {
+  onClose?: () => void;
+};
 
 function ArrowUpIcon({ className }: { className?: string }) {
   return (
@@ -98,7 +100,7 @@ function MarkdownMessage({ content }: { content: string }) {
   );
 }
 
-export function ChatSidebar({}: ChatSidebarProps) {
+export function ChatSidebar({ onClose }: ChatSidebarProps) {
   const { userGoal, setUserGoal, triggerRefresh, chatContext, clearChatContext } = useUserGoal();
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -431,8 +433,6 @@ export function ChatSidebar({}: ChatSidebarProps) {
     <aside
       className="flex flex-col h-full shrink-0 overflow-hidden"
       style={{
-        width: "40vw",
-        minWidth: "40vw",
         borderLeft: "1px solid rgba(255,255,255,0.07)",
         background: "#0E0E0E",
       }}
@@ -490,6 +490,20 @@ export function ChatSidebar({}: ChatSidebarProps) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
+          {/* Close (mobile) */}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-7 h-7 rounded-lg flex items-center justify-center md:hidden"
+              style={{ color: "#5A5A78" }}
+              title="Close chat"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

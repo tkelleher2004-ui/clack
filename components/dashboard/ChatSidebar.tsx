@@ -22,6 +22,13 @@ type Message = {
   content: string;
 };
 
+type ConversationSummary = {
+  id: string;
+  preview: string;
+  updated_at: string;
+  message_count: number;
+};
+
 type ChatSidebarProps = Record<string, never>;
 
 function ArrowUpIcon({ className }: { className?: string }) {
@@ -102,6 +109,37 @@ export function ChatSidebar({}: ChatSidebarProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingConversation, setIsLoadingConversation] = useState(true);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Load conversation list
+  const loadConversationList = useCallback(async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("ai_conversations")
+      .select("id, messages, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    if (data) {
+      const summaries: ConversationSummary[] = data.map((c) => {
+        const msgs = c.messages as Array<{ role?: string; content?: string }> | null;
+        const firstUserMsg = msgs?.find((m) => m.role === "user");
+        const preview = firstUserMsg?.content?.slice(0, 80) ?? "New conversation";
+        return {
+          id: c.id,
+          preview,
+          updated_at: c.updated_at,
+          message_count: msgs?.length ?? 0,
+        };
+      });
+      setConversations(summaries);
+    }
+  }, []);
 
   // Persist messages to Supabase
   const persistMessages = useCallback(async (msgs: Message[]) => {
@@ -130,9 +168,41 @@ export function ChatSidebar({}: ChatSidebarProps) {
           conversationIdRef.current = data.id;
         }
       }
+      loadConversationList();
     } catch (err) {
       console.error("[chat] persist error:", err);
     }
+  }, [loadConversationList]);
+
+  // Switch to a specific conversation
+  const switchConversation = useCallback(async (convId: string) => {
+    setIsLoadingConversation(true);
+    setShowHistory(false);
+    const supabase = createClient();
+    const { data: conv } = await supabase
+      .from("ai_conversations")
+      .select("id, messages")
+      .eq("id", convId)
+      .single();
+
+    if (conv?.messages && Array.isArray(conv.messages)) {
+      const loaded = (conv.messages as Array<{ id?: string; role?: string; content?: string }>).map((m) => ({
+        id: m.id ?? crypto.randomUUID(),
+        role: (m.role === "user" ? "user" : "ai") as "ai" | "user",
+        content: m.content ?? "",
+      }));
+      setMessages(loaded);
+      conversationIdRef.current = conv.id;
+    }
+    setIsLoadingConversation(false);
+  }, []);
+
+  // Start a new conversation
+  const startNewChat = useCallback(() => {
+    setMessages([]);
+    conversationIdRef.current = null;
+    setShowHistory(false);
+    setError(null);
   }, []);
 
   // Check for Instagram welcome flag
@@ -183,12 +253,13 @@ export function ChatSidebar({}: ChatSidebarProps) {
         conversationIdRef.current = conv.id;
       }
       setIsLoadingConversation(false);
+      loadConversationList();
     }
     load();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadConversationList]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -389,7 +460,92 @@ export function ChatSidebar({}: ChatSidebarProps) {
             )}
           </div>
         </div>
+        <div className="flex items-center gap-1">
+          {/* History toggle */}
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            style={{
+              color: showHistory ? "#C4B5FD" : "#5A5A78",
+              background: showHistory ? "rgba(124,92,252,0.15)" : "transparent",
+            }}
+            title="Conversation history"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          {/* New chat */}
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            style={{ color: "#5A5A78" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#C4B5FD"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#5A5A78"; }}
+            title="New conversation"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
       </div>
+
+      {/* Conversation history panel */}
+      {showHistory && (
+        <div
+          className="shrink-0 overflow-y-auto"
+          style={{
+            maxHeight: "240px",
+            borderBottom: "1px solid rgba(255,255,255,0.07)",
+            background: "rgba(0,0,0,0.3)",
+          }}
+        >
+          {conversations.length === 0 ? (
+            <p className="text-[12px] px-4 py-3" style={{ color: "#5A5A78" }}>
+              No past conversations
+            </p>
+          ) : (
+            <div className="py-1">
+              {conversations.map((c) => {
+                const isActive = c.id === conversationIdRef.current;
+                const date = new Date(c.updated_at);
+                const timeStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => switchConversation(c.id)}
+                    className="w-full text-left px-4 py-2.5 transition-colors"
+                    style={{
+                      background: isActive ? "rgba(124,92,252,0.10)" : "transparent",
+                      borderLeft: isActive ? "2px solid #7C5CFC" : "2px solid transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.04)";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                    }}
+                  >
+                    <p
+                      className="text-[12px] truncate"
+                      style={{ color: isActive ? "#F0F0F8" : "#9090AA" }}
+                    >
+                      {c.preview}
+                    </p>
+                    <p className="text-[10px] mt-0.5" style={{ color: "#5A5A78" }}>
+                      {timeStr} · {c.message_count} messages
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 px-4 py-5 space-y-5">

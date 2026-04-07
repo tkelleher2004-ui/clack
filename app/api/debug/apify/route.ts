@@ -4,6 +4,10 @@ import { ApifyClient } from "apify-client";
 export const maxDuration = 120;
 
 export async function GET(req: NextRequest) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not available in production" }, { status: 403 });
+  }
+
   const token = process.env.APIFY_TOKEN;
   if (!token) return NextResponse.json({ error: "No APIFY_TOKEN" }, { status: 500 });
 

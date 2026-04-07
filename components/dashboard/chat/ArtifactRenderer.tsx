@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 export interface ArtifactData {
   type: "content_idea" | "weekly_brief" | "post_score" | "insight_chart";
   [key: string]: unknown;
@@ -78,11 +80,65 @@ function ArtifactShell({
 }
 
 function ContentIdeaCard({ data }: { data: ContentIdea }) {
+  const [postStatus, setPostStatus] = useState<"idle" | "saving" | "posted">("idle");
+
+  const markAsPosted = async () => {
+    setPostStatus("saving");
+    try {
+      const res = await fetch("/api/ideas/mark-posted", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: data.title,
+          format: data.format,
+          hook: data.hook,
+        }),
+      });
+      if (res.ok) {
+        setPostStatus("posted");
+      } else {
+        setPostStatus("idle");
+      }
+    } catch {
+      setPostStatus("idle");
+    }
+  };
+
   return (
     <ArtifactShell label="Content Idea" color="#7C5CFC">
-      <p className="text-[13px] font-medium mb-2" style={{ color: "#E8E8F0" }}>
-        {data.title}
-      </p>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <p className="text-[13px] font-medium" style={{ color: "#E8E8F0" }}>
+          {data.title}
+        </p>
+        {postStatus === "posted" ? (
+          <span
+            className="text-[10px] px-2 py-1 rounded-lg shrink-0 font-medium"
+            style={{ background: "rgba(74,222,128,0.12)", color: "#4ADE80" }}
+          >
+            Posted
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={markAsPosted}
+            disabled={postStatus === "saving"}
+            className="text-[10px] px-2 py-1 rounded-lg shrink-0 font-medium transition-colors"
+            style={{
+              background: "rgba(124,92,252,0.10)",
+              border: "1px solid rgba(124,92,252,0.25)",
+              color: "#A78BFA",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,92,252,0.20)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,92,252,0.10)";
+            }}
+          >
+            {postStatus === "saving" ? "Saving..." : "I posted this"}
+          </button>
+        )}
+      </div>
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         {data.format && (
           <span

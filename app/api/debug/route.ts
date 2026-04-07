@@ -6,6 +6,10 @@ import { createClient } from "@/lib/supabase/server";
  * GET /api/debug — Returns DB state for the current user (must be logged in)
  */
 export async function GET() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not available in production" }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

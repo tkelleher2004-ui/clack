@@ -53,6 +53,13 @@ function buildSystemPrompt(
           .join("\n")}`
       : "";
 
+  const postedIdeasBlock =
+    ctx.postedIdeas.length > 0
+      ? `IDEAS THE USER ALREADY POSTED (track outcomes!):\n${ctx.postedIdeas
+          .map((p) => `- "${p.title}" (${p.format ?? "unknown format"}) — posted ${new Date(p.postedAt).toLocaleDateString()}`)
+          .join("\n")}`
+      : "";
+
   const calendarBlock =
     ctx.weeklyCalendar.length > 0
       ? `CONTENT CALENDAR (CURRENT WEEK):\n${ctx.weeklyCalendar
@@ -81,6 +88,8 @@ ${playbookBlock}
 ${goalBlock}
 
 ${ideasBlock}
+
+${postedIdeasBlock}
 
 ${calendarBlock}
 
@@ -190,6 +199,7 @@ export async function POST(req: Request) {
       playbook: null,
       userGoal: null,
       simulatedIdeas: [],
+      postedIdeas: [],
       weeklyCalendar: [],
       postingStats: { daysSinceLastPost: null, avgPostsPerWeek: 0, totalPostCount: 0 },
     };
@@ -205,11 +215,29 @@ export async function POST(req: Request) {
   const systemPrompt = buildSystemPrompt(ctx, today);
 
   const anthropic = new Anthropic({ apiKey });
-  const anthropicMessages: Array<{ role: "user" | "assistant"; content: string }> =
+
+  // Token management: estimate tokens (~4 chars per token) and truncate old messages
+  // Keep system prompt budget (~3000 tokens) + response budget (4096) within 128k context
+  const MAX_MESSAGE_TOKENS = 80_000;
+  const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+
+  let anthropicMessages: Array<{ role: "user" | "assistant"; content: string }> =
     messages.map((m) => ({
       role: m.role === "user" ? "user" : "assistant",
       content: m.content,
     }));
+
+  // Truncate from the beginning if over budget, always keep the last message
+  let totalTokens = anthropicMessages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+  while (totalTokens > MAX_MESSAGE_TOKENS && anthropicMessages.length > 1) {
+    const removed = anthropicMessages.shift()!;
+    totalTokens -= estimateTokens(removed.content);
+    // Ensure first message is always from user (Claude API requirement)
+    if (anthropicMessages.length > 0 && anthropicMessages[0].role === "assistant") {
+      const skipped = anthropicMessages.shift()!;
+      totalTokens -= estimateTokens(skipped.content);
+    }
+  }
 
   try {
     const stream = await anthropic.messages.create({

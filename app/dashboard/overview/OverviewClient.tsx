@@ -172,24 +172,28 @@ export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, di
   const [activeTab, setActiveTab] = useState(() => availablePlatforms[0] ?? "tiktok");
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(initialAiAnalysis);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const { refreshSignal, consumeRefresh, setChatContext } = useUserGoal();
   const prevSignalRef = useRef(refreshSignal);
 
   const runRefresh = useCallback(() => {
     if (allPosts.length < 3) {
-      console.log("[OverviewClient] skipping refresh — fewer than 3 posts");
       return;
     }
-    console.log("[OverviewClient] calling /api/overview/refresh");
     setIsRefreshing(true);
+    setRefreshError(null);
     fetch("/api/overview/refresh", { method: "POST" })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data: { analysis?: AIAnalysis | null }) => {
-        console.log("[OverviewClient] refresh response:", data.analysis ? "got analysis" : "no analysis");
         if (data.analysis) setAiAnalysis(data.analysis);
       })
-      .catch((err) => console.error("[OverviewClient] refresh error:", err))
+      .catch(() => {
+        setRefreshError("Couldn't refresh analysis. Try again later.");
+      })
       .finally(() => setIsRefreshing(false));
   }, [allPosts.length]);
 
@@ -818,6 +822,16 @@ export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, di
               <span className="text-[11px] font-medium animate-pulse" style={{ color: "#A78BFA" }}>
                 ✦ Updating…
               </span>
+            )}
+            {refreshError && !isRefreshing && (
+              <button
+                type="button"
+                onClick={runRefresh}
+                className="text-[11px] font-medium transition-opacity hover:opacity-80"
+                style={{ color: C.red }}
+              >
+                {refreshError} Retry
+              </button>
             )}
           </div>
           <div style={{ ...CARD, opacity: isRefreshing ? 0.5 : 1, transition: "opacity 0.3s" }} className="mt-3 p-5">

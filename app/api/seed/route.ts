@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 // POST /api/seed — Seeds realistic demo data for the current logged-in user.
 // Idempotent: clears existing seed data first, then re-inserts.
-// REMOVE or gate behind env check before production.
+// Only available in development.
 
 const IG_POSTS = [
   { caption: "3 Claude Code MCP servers that replaced paid tools for me", views: 798000, likes: 21172, comments: 293, shares: 2100, post_type: "reel", days_ago: 8 },
@@ -43,6 +43,10 @@ function daysAgo(n: number): string {
 }
 
 export async function POST() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not available in production" }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 

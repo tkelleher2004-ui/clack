@@ -332,6 +332,11 @@ export interface ChatContextData {
     viewsMax: number;
     signal: string;
   }>;
+  postedIdeas: Array<{
+    title: string;
+    format: string | null;
+    postedAt: string;
+  }>;
   weeklyCalendar: Array<{
     day: string;
     date: string;
@@ -350,7 +355,7 @@ export interface ChatContextData {
 export async function getChatContext(userId: string): Promise<ChatContextData> {
   const supabase = await createClient();
 
-  const [{ data: accounts }, { data: posts }, { data: cachedAnalysis }, { data: goalArtifact }] =
+  const [{ data: accounts }, { data: posts }, { data: cachedAnalysis }, { data: goalArtifact }, { data: postedIdeaRows }] =
     await Promise.all([
       supabase
         .from("social_accounts")
@@ -377,6 +382,13 @@ export async function getChatContext(userId: string): Promise<ChatContextData> {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from("ai_artifacts")
+        .select("data, created_at")
+        .eq("user_id", userId)
+        .eq("type", "posted_idea")
+        .order("created_at", { ascending: false })
+        .limit(20),
     ]);
 
   const dbAccounts = ((accounts ?? []) as DbSocialAccount[]).filter(
@@ -528,6 +540,16 @@ export async function getChatContext(userId: string): Promise<ChatContextData> {
     avgPostsPerWeek = Math.round((sortedByDate.length / (spanDays / 7)) * 10) / 10;
   }
 
+  // Parse posted ideas
+  const postedIdeas = (postedIdeaRows ?? []).map((row) => {
+    const d = row.data as { title?: string; format?: string; posted_at?: string } | null;
+    return {
+      title: d?.title ?? "Unknown",
+      format: d?.format ?? null,
+      postedAt: d?.posted_at ?? row.created_at,
+    };
+  });
+
   return {
     accounts: accountsList,
     top20Posts,
@@ -535,6 +557,7 @@ export async function getChatContext(userId: string): Promise<ChatContextData> {
     playbook: analysis?.playbook ?? null,
     userGoal: goalArtifact?.data as ChatContextData["userGoal"] ?? null,
     simulatedIdeas: analysis?.simulatedIdeas?.slice(0, 7) ?? [],
+    postedIdeas,
     weeklyCalendar: analysis?.weeklyCalendar ?? [],
     postingStats: {
       daysSinceLastPost,

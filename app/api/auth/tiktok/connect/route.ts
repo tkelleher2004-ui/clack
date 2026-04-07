@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { encodeOAuthState } from "@/lib/auth/oauth-state";
 
 // Scope separator is comma, NOT space (per TikTok API)
+// user.info.profile = username; user.info.basic = display_name, avatar; user.info.stats = follower_count, etc.
 const TIKTOK_SCOPES = [
   "user.info.basic",
+  "user.info.profile",
   "user.info.stats",
   "video.list",
 ].join(",");
@@ -29,7 +31,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const baseUrl = request.nextUrl.origin;
+  // Use canonical base URL so redirect_uri matches exactly what's in TikTok app config.
+  // Must match callback route; set NEXT_PUBLIC_APP_URL=https://www.useclack.com in Vercel.
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+    request.nextUrl.origin;
   const state = encodeOAuthState(user.id, "tiktok");
   const redirectUri = `${baseUrl}/api/auth/tiktok/callback`;
 

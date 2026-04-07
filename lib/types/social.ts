@@ -11,10 +11,14 @@ export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 export interface SocialAccountAccountData {
   name?: string;
   biography?: string;
+  bio?: string;
   followers_count?: number;
+  follower_count?: number;
   follows_count?: number;
+  following_count?: number;
   media_count?: number;
   video_count?: number;
+  likes_count?: number;
   profile_picture_url?: string;
   avatar_url?: string;
   page_name?: string;
@@ -26,6 +30,8 @@ export interface SocialAccount {
   platform: SocialPlatform;
   platform_account_id: string;
   username: string | null;
+  display_name?: string | null;
+  profile_image_url?: string | null;
   access_token?: string; // Server-only, not returned to client via RLS
   account_data?: SocialAccountAccountData;
   last_synced_at: string | null;
@@ -57,6 +63,19 @@ export interface SocialPost {
   external_post_id: string;
   raw_data: Record<string, unknown> | null;
   created_at: string;
+}
+
+export type PrimaryGoal =
+  | "grow_audience"
+  | "drive_conversions"
+  | "go_viral"
+  | "build_brand";
+
+export interface UserGoal {
+  primaryGoal: PrimaryGoal;
+  currentFocus: string;
+  weeklyTarget: string;
+  updatedAt: string;
 }
 
 export const PLATFORM_CONFIG: Record<

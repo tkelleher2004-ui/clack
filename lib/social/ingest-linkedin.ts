@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { decryptTokens } from "@/lib/crypto/tokens";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -20,14 +19,7 @@ export async function ingestLinkedIn(accountId: string, onProgress?: (msg: strin
     throw new Error("Account not found or not LinkedIn");
   }
 
-  let tokens: { access_token: string; refresh_token?: string; token_expires_at?: number };
-  try {
-    tokens = decryptTokens(account.encrypted_tokens);
-  } catch {
-    throw new Error("Failed to decrypt tokens");
-  }
-
-  const accessToken = tokens.access_token;
+  const accessToken: string = account.access_token;
 
   onProgress?.("Syncing profile...");
 
@@ -51,11 +43,10 @@ export async function ingestLinkedIn(accountId: string, onProgress?: (msg: strin
     id: string;
     created?: number;
     commentary?: string;
-    visibility?: string;
   }> = [];
 
   try {
-    const personId = (profile.sub ?? account.external_account_id).replace(/-/g, "");
+    const personId = (profile.sub ?? account.platform_account_id).replace(/-/g, "");
     const sharesRes = await fetch(
       `https://api.linkedin.com/v2/ugcPosts?q=authors&authors=List(urn%3Ali%3Aperson%3A${personId})&count=50`,
       {
@@ -72,7 +63,6 @@ export async function ingestLinkedIn(accountId: string, onProgress?: (msg: strin
           id?: string;
           createdAt?: number;
           commentary?: string;
-          visibility?: { comLinkedinUgcDistributionType?: string };
         }>;
       };
       if (sharesData.elements) {
@@ -82,95 +72,48 @@ export async function ingestLinkedIn(accountId: string, onProgress?: (msg: strin
               id: el.id,
               created: el.createdAt,
               commentary: el.commentary,
-              visibility: el.visibility?.comLinkedinUgcDistributionType,
             });
           }
         }
       }
     }
   } catch {
-    // LinkedIn posts API may require additional permissions (r_organization_social, etc.)
+    // LinkedIn posts API may require additional permissions — continue with 0 posts
   }
 
   onProgress?.(`Syncing posts... ${posts.length}/${posts.length}`);
 
-  for (let i = 0; i < posts.length; i++) {
-    const p = posts[i];
-    const hashtags = extractHashtags(p.commentary ?? "");
+  const postRows = posts.map((p) => ({
+    user_id: account.user_id,
+    social_account_id: accountId,
+    platform: "linkedin" as const,
+    platform_post_id: p.id,
+    content_type: "text" as const,
+    caption: p.commentary ?? null,
+    posted_at: p.created ? new Date(p.created).toISOString() : null,
+    metrics: { likes: 0, comments: 0 },
+  }));
 
-    await supabase.from("social_posts").upsert(
-      {
-        user_id: account.user_id,
-        social_account_id: accountId,
-        platform: "linkedin",
-        post_type: "text",
-        title: null,
-        caption: p.commentary ?? null,
-        hashtags: hashtags.length ? hashtags : null,
-        thumbnail_url: null,
-        media_url: null,
-        published_at: p.created ? new Date(p.created).toISOString() : null,
-        external_post_id: p.id,
-        raw_data: p as unknown as Record<string, unknown>,
-      },
-      { onConflict: "social_account_id,external_post_id" }
-    );
-
-    const { data: postRow } = await supabase
+  if (postRows.length > 0) {
+    const { error: postsErr } = await supabase
       .from("social_posts")
-      .select("id")
-      .eq("social_account_id", accountId)
-      .eq("external_post_id", p.id)
-      .single();
-
-    if (postRow) {
-      await supabase.from("post_analytics").upsert(
-        {
-          social_post_id: postRow.id,
-          views: 0,
-          likes: 0,
-          comments: 0,
-          engagement_rate: 0,
-          fetched_at: new Date().toISOString(),
-        },
-        { onConflict: "social_post_id" }
-      );
-    }
-
-    onProgress?.(`Syncing posts... ${i + 1}/${posts.length}`);
+      .upsert(postRows, { onConflict: "platform,platform_post_id" });
+    if (postsErr) throw new Error(`Failed to save posts: ${postsErr.message}`);
   }
 
   onProgress?.("Pulling analytics...");
 
-  await supabase.from("audience_data").insert({
-    social_account_id: accountId,
-    follower_count: account.follower_count ?? 0,
-    following_count: 0,
-    fetched_at: new Date().toISOString(),
-  });
-
-  await supabase.from("channel_analytics").insert({
-    social_account_id: accountId,
-    total_views: 0,
-    avg_engagement_rate: 0,
-    posting_frequency: posts.length,
-    top_content_types: ["text"],
-    fetched_at: new Date().toISOString(),
-  });
+  const existingData = (account.account_data ?? {}) as Record<string, unknown>;
 
   await supabase
     .from("social_accounts")
     .update({
-      sync_status: "synced",
-      sync_progress: null,
-      sync_error: null,
+      account_data: {
+        ...existingData,
+        profile_picture_url: profile.picture ?? existingData.profile_picture_url ?? null,
+      },
       last_synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("id", accountId);
-}
-
-function extractHashtags(text: string): string[] {
-  const matches = text.match(/#[\w]+/g) ?? [];
-  return [...new Set(matches.map((m) => m.slice(1)))];
 }

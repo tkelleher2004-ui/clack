@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
+  serverExternalPackages: ["apify-client"],
   async rewrites() {
     return [
       // TikTok domain verification appends trailing slash; serve file content at both URLs

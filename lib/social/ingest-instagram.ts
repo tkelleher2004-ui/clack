@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { decryptTokens } from "@/lib/crypto/tokens";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -20,15 +19,50 @@ export async function ingestInstagram(accountId: string, onProgress?: (msg: stri
     throw new Error("Account not found or not Instagram");
   }
 
-  let tokens: { access_token: string; refresh_token?: string; token_expires_at?: number };
-  try {
-    tokens = decryptTokens(account.encrypted_tokens);
-  } catch {
-    throw new Error("Failed to decrypt tokens");
+  // Refresh long-lived token if close to expiry (Instagram tokens expire in ~60 days)
+  let accessToken: string = account.access_token;
+  if (account.token_expires_at) {
+    const expiresAt = new Date(account.token_expires_at).getTime();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if (expiresAt < Date.now() + sevenDaysMs) {
+      const appId = process.env.META_APP_ID;
+      const appSecret = process.env.META_APP_SECRET;
+      if (appId && appSecret) {
+        try {
+          const refreshUrl = new URL("https://graph.facebook.com/v21.0/oauth/access_token");
+          refreshUrl.searchParams.set("grant_type", "fb_exchange_token");
+          refreshUrl.searchParams.set("client_id", appId);
+          refreshUrl.searchParams.set("client_secret", appSecret);
+          refreshUrl.searchParams.set("fb_exchange_token", accessToken);
+          const refreshRes = await fetch(refreshUrl.toString());
+          if (refreshRes.ok) {
+            const refreshData = (await refreshRes.json()) as {
+              access_token?: string;
+              expires_in?: number;
+            };
+            if (refreshData.access_token) {
+              accessToken = refreshData.access_token;
+              const newExpiresAt = refreshData.expires_in
+                ? new Date(Date.now() + refreshData.expires_in * 1000).toISOString()
+                : null;
+              await supabase
+                .from("social_accounts")
+                .update({
+                  access_token: accessToken,
+                  token_expires_at: newExpiresAt,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", accountId);
+            }
+          }
+        } catch {
+          // Token refresh is best-effort; continue with existing token
+        }
+      }
+    }
   }
 
-  const igUserId = account.external_account_id;
-  const accessToken = tokens.access_token;
+  const igUserId = account.platform_account_id;
 
   onProgress?.("Syncing posts...");
 
@@ -43,12 +77,11 @@ export async function ingestInstagram(accountId: string, onProgress?: (msg: stri
     like_count?: number;
     comments_count?: number;
   }> = [];
-  let nextUrl: string | null = `https://graph.facebook.com/v18.0/${igUserId}/media?fields=id,media_type,media_url,thumbnail_url,caption,timestamp,permalink,like_count,comments_count&limit=50`;
+  let nextUrl: string | null =
+    `https://graph.facebook.com/v18.0/${igUserId}/media?fields=id,media_type,media_url,thumbnail_url,caption,timestamp,permalink,like_count,comments_count&limit=50&access_token=${accessToken}`;
 
   while (nextUrl) {
-    const res = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const res = await fetch(nextUrl);
 
     if (!res.ok) {
       const err = await res.text();
@@ -67,74 +100,48 @@ export async function ingestInstagram(accountId: string, onProgress?: (msg: stri
 
   onProgress?.(`Syncing posts... ${media.length}/${media.length}`);
 
-  for (let i = 0; i < media.length; i++) {
-    const m = media[i];
-    const hashtags = extractHashtags(m.caption ?? "");
-
-    const postType =
+  const posts = media.map((m) => {
+    const contentType =
       m.media_type === "VIDEO"
         ? "video"
         : m.media_type === "CAROUSEL_ALBUM"
           ? "carousel"
           : "image";
 
-    await supabase.from("social_posts").upsert(
-      {
-        user_id: account.user_id,
-        social_account_id: accountId,
-        platform: "instagram",
-        post_type: postType,
-        title: null,
-        caption: m.caption ?? null,
-        hashtags: hashtags.length ? hashtags : null,
-        thumbnail_url: m.thumbnail_url ?? m.media_url ?? null,
-        media_url: m.media_url ?? m.permalink ?? null,
-        published_at: m.timestamp ?? null,
-        external_post_id: m.id,
-        raw_data: m as unknown as Record<string, unknown>,
+    return {
+      user_id: account.user_id,
+      social_account_id: accountId,
+      platform: "instagram" as const,
+      platform_post_id: m.id,
+      content_type: contentType,
+      caption: m.caption ?? null,
+      thumbnail_url: m.thumbnail_url ?? m.media_url ?? null,
+      media_url: m.media_url ?? m.permalink ?? null,
+      permalink: m.permalink ?? null,
+      posted_at: m.timestamp ?? null,
+      metrics: {
+        likes: m.like_count ?? 0,
+        comments: m.comments_count ?? 0,
       },
-      { onConflict: "social_account_id,external_post_id" }
-    );
+    };
+  });
 
-    const views = 0;
-    const likes = m.like_count ?? 0;
-    const comments = m.comments_count ?? 0;
-    const engagementRate = (likes + comments) > 0 ? ((likes + comments) / Math.max(likes + comments, 1)) * 100 : 0;
-
-    const { data: post } = await supabase
+  if (posts.length > 0) {
+    const { error: postsErr } = await supabase
       .from("social_posts")
-      .select("id")
-      .eq("social_account_id", accountId)
-      .eq("external_post_id", m.id)
-      .single();
-
-    if (post) {
-      await supabase.from("post_analytics").upsert(
-        {
-          social_post_id: post.id,
-          views,
-          likes,
-          comments,
-          engagement_rate: engagementRate,
-          fetched_at: new Date().toISOString(),
-        },
-        { onConflict: "social_post_id" }
-      );
-    }
-
-    onProgress?.(`Syncing posts... ${i + 1}/${media.length}`);
+      .upsert(posts, { onConflict: "platform,platform_post_id" });
+    if (postsErr) throw new Error(`Failed to save posts: ${postsErr.message}`);
   }
 
   onProgress?.("Pulling analytics...");
 
   const profileRes = await fetch(
-    `https://graph.facebook.com/v18.0/${igUserId}?fields=followers_count,follows_count,media_count,name,username,biography,profile_picture_url`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    `https://graph.facebook.com/v18.0/${igUserId}?fields=followers_count,follows_count,media_count,name,username,biography,profile_picture_url&access_token=${accessToken}`
   );
 
-  let followerCount = account.follower_count ?? 0;
-  let accountName = account.account_name;
-  let accountAvatar = account.account_avatar_url;
+  const existingData = (account.account_data ?? {}) as Record<string, unknown>;
+  let updatedAccountData = { ...existingData };
+
   if (profileRes.ok) {
     const profile = (await profileRes.json()) as {
       followers_count?: number;
@@ -145,60 +152,35 @@ export async function ingestInstagram(accountId: string, onProgress?: (msg: stri
       biography?: string;
       profile_picture_url?: string;
     };
-    followerCount = profile.followers_count ?? followerCount;
-    accountName = profile.username ?? profile.name ?? accountName;
-    accountAvatar = profile.profile_picture_url ?? accountAvatar;
-    await supabase.from("audience_data").insert({
-      social_account_id: accountId,
-      follower_count: followerCount,
-      following_count: profile.follows_count ?? 0,
-      fetched_at: new Date().toISOString(),
-    });
-  }
 
-  const avgEngagement =
-    media.length > 0
-      ? media.reduce((s, m) => {
-          const likes = m.like_count ?? 0;
-          const comments = m.comments_count ?? 0;
-          return s + (likes + comments);
-        }, 0) / media.length
-      : 0;
+    updatedAccountData = {
+      ...updatedAccountData,
+      followers_count: profile.followers_count ?? existingData.followers_count ?? 0,
+      follows_count: profile.follows_count ?? existingData.follows_count ?? 0,
+      media_count: profile.media_count ?? existingData.media_count ?? 0,
+      biography: profile.biography ?? existingData.biography ?? null,
+      profile_picture_url: profile.profile_picture_url ?? existingData.profile_picture_url ?? null,
+    };
 
-  const contentTypes = media.reduce(
-    (acc, m) => {
-      const t = m.media_type === "VIDEO" ? "video" : m.media_type === "CAROUSEL_ALBUM" ? "carousel" : "image";
-      acc[t] = (acc[t] ?? 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
-
-  await supabase.from("channel_analytics").insert({
-    social_account_id: accountId,
-    total_views: 0,
-    avg_engagement_rate: avgEngagement,
-    posting_frequency: 0,
-    top_content_types: contentTypes,
-    fetched_at: new Date().toISOString(),
-  });
-
-  await supabase
-    .from("social_accounts")
-    .update({
-      sync_status: "synced",
-      sync_progress: null,
-      sync_error: null,
+    const updatePayload: Record<string, unknown> = {
+      account_data: updatedAccountData,
       last_synced_at: new Date().toISOString(),
-      follower_count: followerCount,
-      account_name: accountName,
-      account_avatar_url: accountAvatar,
       updated_at: new Date().toISOString(),
-    })
-    .eq("id", accountId);
-}
+    };
 
-function extractHashtags(text: string): string[] {
-  const matches = text.match(/#[\w]+/g) ?? [];
-  return [...new Set(matches.map((m) => m.slice(1)))];
+    if (profile.username) updatePayload.username = profile.username;
+    if (profile.name) updatePayload.display_name = profile.name;
+    if (profile.profile_picture_url) updatePayload.profile_image_url = profile.profile_picture_url;
+
+    await supabase.from("social_accounts").update(updatePayload).eq("id", accountId);
+  } else {
+    await supabase
+      .from("social_accounts")
+      .update({
+        account_data: updatedAccountData,
+        last_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", accountId);
+  }
 }

@@ -6,17 +6,6 @@ function getAccountsUrl(origin: string) {
   return `${origin}/dashboard/accounts`;
 }
 
-const USER_INFO_FIELDS = [
-  "open_id",
-  "union_id",
-  "avatar_url",
-  "display_name",
-  "username",
-  "follower_count",
-  "following_count",
-  "likes_count",
-  "video_count",
-].join(",");
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -51,7 +40,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${accountsUrl}?error=config`);
   }
 
-  const baseUrl = origin;
+  // Use canonical base URL so redirect_uri matches exactly what's in TikTok app config.
+  // Set NEXT_PUBLIC_APP_URL=https://www.useclack.com (with www) in Vercel to avoid www/non-www mismatch.
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+    origin;
   const redirectUri = `${baseUrl}/api/auth/tiktok/callback`;
 
   try {
@@ -79,7 +73,11 @@ export async function GET(request: NextRequest) {
     };
 
     if (!tokenData.access_token || tokenData.error) {
-      console.error("[tiktok/callback] Token exchange failed:", tokenData.error);
+      console.error("[tiktok/callback] Token exchange failed:", tokenData.error, {
+        redirect_uri: redirectUri,
+        has_code: !!code,
+        http_status: tokenRes.status,
+      });
       return NextResponse.redirect(`${accountsUrl}?error=token_exchange`);
     }
 
@@ -91,41 +89,64 @@ export async function GET(request: NextRequest) {
         ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
         : null;
 
-    // Fetch user info
-    const userInfoRes = await fetch(
-      `https://open.tiktokapis.com/v2/user/info/?fields=${encodeURIComponent(USER_INFO_FIELDS)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    // Try to fetch user info – may fail in Sandbox with scope_not_authorized
+    // Fields: user.info.basic (open_id, union_id, avatar_url, display_name), user.info.profile (username, bio_description), user.info.stats (follower_count, following_count, likes_count, video_count)
+    let username: string | null = null;
+    let displayName: string | null = null;
+    let profileImageUrl: string | null = null;
+    let accountData: Record<string, unknown> = { open_id: openId };
 
-    const userInfoData = (await userInfoRes.json()) as {
-      data?: {
-        user?: {
-          open_id?: string;
-          union_id?: string;
-          avatar_url?: string;
-          display_name?: string;
-          username?: string;
-          follower_count?: number;
-          following_count?: number;
-          likes_count?: number;
-          video_count?: number;
-        };
+    const userInfoFields = [
+      "open_id",
+      "union_id",
+      "avatar_url",
+      "avatar_large_url",
+      "display_name",
+      "username",
+      "bio_description",
+      "follower_count",
+      "following_count",
+      "likes_count",
+      "video_count",
+    ].join(",");
+
+    try {
+      const userInfoRes = await fetch(
+        `https://open.tiktokapis.com/v2/user/info/?fields=${userInfoFields}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const userInfoJson = (await userInfoRes.json()) as {
+        data?: { user?: Record<string, unknown> };
+        error?: { code?: string; message?: string };
       };
-      error?: { code?: string; message?: string };
-    };
-
-    if (userInfoData.error || !userInfoData.data?.user) {
-      console.error("[tiktok/callback] User info failed:", userInfoData.error);
+      if (!userInfoJson.error && userInfoJson.data?.user) {
+        const u = userInfoJson.data.user;
+        username = (u.username as string) ?? null;
+        displayName = (u.display_name as string) ?? null;
+        profileImageUrl =
+          (u.avatar_large_url as string) ?? (u.avatar_url as string) ?? null;
+        accountData = {
+          open_id: openId,
+          union_id: u.union_id ?? null,
+          follower_count: u.follower_count ?? 0,
+          following_count: u.following_count ?? 0,
+          likes_count: u.likes_count ?? 0,
+          video_count: u.video_count ?? 0,
+          bio: (u.bio_description as string) ?? null,
+          followers_count: u.follower_count ?? 0,
+          follows_count: u.following_count ?? 0,
+          biography: (u.bio_description as string) ?? null,
+        };
+      }
+    } catch {
+      // Ignore – we continue with open_id only
     }
 
-    const user = userInfoData.data?.user ?? {};
-    const platformAccountId = openId || user.open_id || "unknown";
-
-    // Upsert into social_accounts
     const supabase = await createClient();
     const {
       data: { user: authUser },
@@ -140,32 +161,26 @@ export async function GET(request: NextRequest) {
       {
         user_id: userId,
         platform: "tiktok",
-        platform_account_id: platformAccountId,
-        username: user.username ?? null,
-        display_name: user.display_name ?? null,
-        profile_image_url: user.avatar_url ?? null,
+        platform_account_id: openId || "unknown",
+        username,
+        display_name: displayName,
+        profile_image_url: profileImageUrl,
         access_token: accessToken,
         refresh_token: refreshToken,
         token_expires_at: tokenExpiresAt,
-        account_data: {
-          open_id: openId || user.open_id,
-          union_id: user.union_id,
-          avatar_url: user.avatar_url,
-          display_name: user.display_name,
-          username: user.username,
-          followers_count: user.follower_count ?? 0,
-          following_count: user.following_count ?? 0,
-          likes_count: user.likes_count ?? 0,
-          video_count: user.video_count ?? 0,
-        },
-        last_synced_at: new Date().toISOString(),
+        account_data: accountData,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id,platform,platform_account_id" }
     );
 
     if (upsertError) {
-      console.error("[tiktok/callback] Supabase upsert failed:", upsertError);
+      console.error(
+        "[tiktok/callback] Supabase upsert failed:",
+        upsertError.code,
+        upsertError.message,
+        upsertError.details
+      );
       return NextResponse.redirect(`${accountsUrl}?error=save_failed`);
     }
 
@@ -174,13 +189,8 @@ export async function GET(request: NextRequest) {
       .insert({
         user_id: userId,
         type: "account_connected",
-        description: `Connected TikTok @${user.username ?? "unknown"}`,
-        data: {
-          platform: "tiktok",
-          username: user.username ?? null,
-          followers: user.follower_count ?? 0,
-          video_count: user.video_count ?? 0,
-        },
+        description: "Connected TikTok",
+        data: { platform: "tiktok", open_id: openId },
       })
       .then(
         () => {},

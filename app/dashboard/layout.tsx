@@ -20,7 +20,7 @@ export default async function DashboardLayout({
   const pinnedArtifacts = await getPinnedArtifacts(user.id);
 
   return (
-    <DashboardLayoutClient pinnedArtifacts={pinnedArtifacts}>
+    <DashboardLayoutClient pinnedArtifacts={pinnedArtifacts} userId={user.id}>
       {children}
     </DashboardLayoutClient>
   );

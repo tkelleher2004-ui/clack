@@ -5,6 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { signOut } from "@/lib/auth/actions";
+import { UserGoalProvider } from "@/lib/context/UserGoalContext";
+import { ChatSidebar } from "@/components/dashboard/ChatSidebar";
+import { SyncIndicator } from "@/components/dashboard/SyncIndicator";
 
 export interface PinnedArtifact {
   id: string;
@@ -24,11 +27,8 @@ const ARTIFACT_TYPE_COLORS: Record<string, string> = {
 };
 
 const NAV_ITEMS = [
-  { href: "/dashboard/overview", label: "Overview", icon: "grid" },
+  { href: "/dashboard/overview", label: "Dashboard", icon: "grid" },
   { href: "/dashboard/accounts", label: "Accounts", icon: "link" },
-  { href: "/dashboard/marketing-plan", label: "Marketing Plan", icon: "document" },
-  { href: "/dashboard/clips", label: "Clips", icon: "film" },
-  { href: "/dashboard/chat", label: "AI Chat", icon: "sparkle", showDot: true },
   { href: "/dashboard/settings", label: "Settings", icon: "gear" },
 ];
 
@@ -47,18 +47,6 @@ function NavIcon({ name }: { name: string }) {
     return (
       <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-      </svg>
-    );
-  if (name === "document")
-    return (
-      <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    );
-  if (name === "film")
-    return (
-      <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
       </svg>
     );
   if (name === "sparkle")
@@ -80,16 +68,18 @@ function NavIcon({ name }: { name: string }) {
 export interface DashboardLayoutClientProps {
   children: React.ReactNode;
   pinnedArtifacts: PinnedArtifact[];
+  userId: string;
 }
 
 export function DashboardLayoutClient({
   children,
   pinnedArtifacts,
+  userId,
 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(false);
   const [user, setUser] = useState<{ email?: string } | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -98,233 +88,239 @@ export function DashboardLayoutClient({
       .then(({ data: { user: u } }) => setUser(u ?? null));
   }, []);
 
-  const isActive = (href: string) => {
-    if (href === "/dashboard/overview") return pathname === "/dashboard/overview";
-    if (href === "/dashboard/chat") return pathname === "/dashboard" || pathname === "/dashboard/chat";
-    return pathname === href || pathname.startsWith(href + "/");
-  };
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(href + "/");
 
-  const isExpanded = expanded || sidebarOpen;
+  const isExpanded = expanded || mobileSidebarOpen;
 
   return (
-    <div
-      className="flex h-screen overflow-hidden"
-      style={{ background: "#0A0A0A" }}
-    >
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 md:hidden"
-          style={{ background: "rgba(0,0,0,0.6)" }}
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`flex flex-col shrink-0 transition-all duration-200 overflow-hidden fixed inset-y-0 left-0 z-50 md:static ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        }`}
-        onMouseEnter={() => setExpanded(true)}
-        onMouseLeave={() => setExpanded(false)}
+    <UserGoalProvider userId={userId}>
+      <div
+        className="flex h-screen overflow-hidden"
         style={{
-          width: sidebarOpen ? 260 : expanded ? 260 : 56,
-          minWidth: sidebarOpen ? 260 : expanded ? 260 : 56,
-          background: "rgba(12, 12, 20, 0.75)",
-          backdropFilter: "blur(16px) saturate(180%)",
-          WebkitBackdropFilter: "blur(16px) saturate(180%)",
-          borderRight: "1px solid rgba(255, 255, 255, 0.06)",
+          background: "#080808",
         }}
       >
-        {/* Nav items */}
-        <nav className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-          {NAV_ITEMS.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-all duration-150"
+        {/* Mobile overlay */}
+        {mobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 md:hidden"
+            style={{ background: "rgba(0,0,0,0.35)" }}
+            onClick={() => setMobileSidebarOpen(false)}
+            aria-hidden
+          />
+        )}
+
+        {/* Left nav sidebar */}
+        <aside
+          className={`flex flex-col shrink-0 transition-all duration-200 overflow-hidden fixed inset-y-0 left-0 z-50 md:static ${
+            mobileSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          }`}
+          onMouseEnter={() => setExpanded(true)}
+          onMouseLeave={() => setExpanded(false)}
+          style={{
+            width: mobileSidebarOpen ? 260 : expanded ? 260 : 56,
+            minWidth: mobileSidebarOpen ? 260 : expanded ? 260 : 56,
+            background: "#0E0E0E",
+            borderRight: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          {/* Nav items */}
+          <nav className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
+            {NAV_ITEMS.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-all duration-150"
+                  style={{
+                    background: active ? "rgba(124,92,252,0.12)" : "transparent",
+                    color: active ? "#A78BFA" : "#555568",
+                    justifyContent: isExpanded ? undefined : "center",
+                    boxShadow: active ? "inset 2px 0 0 #7C5CFC" : "none",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.05)";
+                    if (!active) (e.currentTarget as HTMLAnchorElement).style.color = "#AAAACC";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+                    if (!active) (e.currentTarget as HTMLAnchorElement).style.color = "#555568";
+                  }}
+                >
+                  <NavIcon name={item.icon} />
+                  {isExpanded && (
+                    <span className="text-sm truncate font-medium">{item.label}</span>
+                  )}
+                </Link>
+              );
+            })}
+
+          </nav>
+
+          {/* Pinned artifacts */}
+          {isExpanded && (
+            <div
+              className="shrink-0 px-2 py-3"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+            >
+              <p
+                className="text-[10px] uppercase tracking-widest px-2 mb-2"
+                style={{ color: "#3D3D58" }}
+              >
+                Pinned
+              </p>
+              {pinnedArtifacts.length > 0 ? (
+                <div className="space-y-0.5">
+                  {pinnedArtifacts.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      className="w-full flex items-center gap-2 py-1.5 rounded-lg px-2 transition-colors duration-100"
+                      style={{ color: "#5A5A78" }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.color = "#C0C0D8";
+                        (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.color = "#5A5A78";
+                        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                      }}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ background: ARTIFACT_TYPE_COLORS[a.type] ?? "#6B6B80" }}
+                      />
+                      <span className="truncate text-xs">{a.title}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs px-2 italic" style={{ color: "#3D3D58" }}>
+                  AI reports will appear here
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* User section */}
+          <div
+            className="shrink-0 p-2"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setUserMenuOpen((o) => !o)}
+                className="flex items-center w-full rounded-xl px-2 py-2 transition-colors duration-150"
                 style={{
-                  background: active ? "rgba(255,255,255,0.10)" : "transparent",
-                  color: active ? "#E8E8F0" : "#6B6B80",
+                  gap: isExpanded ? "10px" : "0",
                   justifyContent: isExpanded ? undefined : "center",
                 }}
                 onMouseEnter={(e) => {
-                  if (!active) (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.05)";
-                  if (!active) (e.currentTarget as HTMLAnchorElement).style.color = "#9898B0";
+                  (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)";
                 }}
                 onMouseLeave={(e) => {
-                  if (!active) (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                  if (!active) (e.currentTarget as HTMLAnchorElement).style.color = "#6B6B80";
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
                 }}
               >
-                <span className="relative shrink-0 flex items-center justify-center">
-                  <NavIcon name={item.icon} />
-                  {item.showDot && (
-                    <span
-                      className="absolute -right-1 -top-1 w-2 h-2 rounded-full"
-                      style={{ background: "#7C5CFC", boxShadow: "0 0 6px rgba(124,92,252,0.8)" }}
-                    />
-                  )}
-                </span>
-                {isExpanded && (
-                  <span className="text-sm truncate font-medium">{item.label}</span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Pinned artifacts */}
-        {isExpanded && (
-          <div
-            className="shrink-0 px-2 py-3"
-            style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
-          >
-            <p
-              className="text-[10px] uppercase tracking-widest px-2 mb-2"
-              style={{ color: "#6B6B80" }}
-            >
-              Pinned
-            </p>
-            {pinnedArtifacts.length > 0 ? (
-              <div className="space-y-0.5">
-                {pinnedArtifacts.map((a) => (
-                  <Link
-                    key={a.id}
-                    href={`/dashboard/chat?artifact=${a.id}`}
-                    className="flex items-center gap-2 py-1.5 rounded-lg px-2 transition-colors duration-100"
-                    style={{ color: "#6B6B80" }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLAnchorElement).style.color = "#9898B0";
-                      (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.04)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLAnchorElement).style.color = "#6B6B80";
-                      (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                    }}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: ARTIFACT_TYPE_COLORS[a.type] ?? "#6B6B80" }}
-                    />
-                    <span className="truncate text-xs">{a.title}</span>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs px-2 italic" style={{ color: "#6B6B80" }}>
-                AI reports will appear here
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* User section */}
-        <div
-          className="shrink-0 p-2"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
-        >
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setUserMenuOpen((o) => !o)}
-              className="flex items-center w-full rounded-xl px-2 py-2 transition-colors duration-150"
-              style={{
-                gap: isExpanded ? "10px" : "0",
-                justifyContent: isExpanded ? undefined : "center",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.05)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-              }}
-            >
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0"
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  color: "#9898B0",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                }}
-              >
-                {user?.email?.[0]?.toUpperCase() ?? "?"}
-              </div>
-              {isExpanded && (
-                <span className="truncate text-xs" style={{ color: "#6B6B80" }}>
-                  {user?.email ?? "Account"}
-                </span>
-              )}
-            </button>
-
-            {userMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-10" aria-hidden onClick={() => setUserMenuOpen(false)} />
                 <div
-                  className="absolute bottom-full left-0 mb-2 py-1 z-20 rounded-xl overflow-hidden"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0"
                   style={{
-                    minWidth: "180px",
-                    background: "rgba(18, 18, 28, 0.95)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-                    backdropFilter: "blur(12px) saturate(180%)",
-                    WebkitBackdropFilter: "blur(12px) saturate(180%)",
+                    background: "rgba(124,92,252,0.18)",
+                    color: "#C4B5FD",
+                    border: "1px solid rgba(124,92,252,0.30)",
                   }}
                 >
-                  <Link
-                    href="/dashboard/settings"
-                    className="block px-4 py-2 text-sm transition-colors duration-100"
-                    style={{ color: "#9898B0" }}
-                    onClick={() => setUserMenuOpen(false)}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "#E8E8F0"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "#9898B0"; }}
-                  >
-                    Settings
-                  </Link>
-                  <form
-                    action={async () => {
-                      await signOut();
-                      window.location.reload();
+                  {user?.email?.[0]?.toUpperCase() ?? "?"}
+                </div>
+                {isExpanded && (
+                  <span className="truncate text-xs" style={{ color: "#5A5A78" }}>
+                    {user?.email ?? "Account"}
+                  </span>
+                )}
+              </button>
+
+              {userMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" aria-hidden onClick={() => setUserMenuOpen(false)} />
+                  <div
+                    className="absolute bottom-full left-0 mb-2 py-1 z-20 rounded-xl overflow-hidden"
+                    style={{
+                      minWidth: "180px",
+                      background: "#1A1A1A",
+                      border: "1px solid rgba(255,255,255,0.09)",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
                     }}
                   >
-                    <button
-                      type="submit"
-                      className="w-full text-left px-4 py-2 text-sm transition-colors duration-100"
-                      style={{ color: "#E57373" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#EF9A9A"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#E57373"; }}
+                    <Link
+                      href="/dashboard/settings"
+                      className="block px-4 py-2 text-sm transition-colors duration-100"
+                      style={{ color: "#9090AA" }}
+                      onClick={() => setUserMenuOpen(false)}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "#F0F0F8"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "#9090AA"; }}
                     >
-                      Log out
-                    </button>
-                  </form>
-                </div>
-              </>
-            )}
+                      Settings
+                    </Link>
+                    <form
+                      action={async () => {
+                        await signOut();
+                        window.location.reload();
+                      }}
+                    >
+                      <button
+                        type="submit"
+                        className="w-full text-left px-4 py-2 text-sm transition-colors duration-100"
+                        style={{ color: "#EF4444" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#FCA5A5"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; }}
+                      >
+                        Log out
+                      </button>
+                    </form>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto relative">
-        {/* Mobile hamburger — only on non-chat pages */}
-        {pathname !== "/dashboard/chat" && pathname !== "/dashboard" && (
-          <button
-            type="button"
-            className="md:hidden fixed top-4 left-4 z-30 p-2 rounded-lg transition-colors"
-            style={{ color: "#6B6B80" }}
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open menu"
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Top bar with sync indicator */}
+          <div
+            className="shrink-0 flex items-center justify-between px-4 py-2 min-h-[44px]"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-        )}
-        {children}
-      </main>
-    </div>
+            {/* Mobile hamburger */}
+            <button
+              type="button"
+              className="md:hidden p-1.5 rounded-lg"
+              style={{ color: "#5A5A78" }}
+              onClick={() => setMobileSidebarOpen(true)}
+              aria-label="Open menu"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div className="hidden md:block" />
+
+            {/* Sync indicator in the top bar */}
+            <SyncIndicator />
+          </div>
+
+          {/* Page content */}
+          <main className="flex-1 overflow-auto relative">
+            {children}
+          </main>
+        </div>
+
+        {/* Persistent AI chat panel — only on Dashboard (overview) */}
+        {pathname.startsWith("/dashboard/overview") && <ChatSidebar />}
+      </div>
+    </UserGoalProvider>
   );
 }

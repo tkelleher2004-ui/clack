@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { decryptTokens } from "@/lib/crypto/tokens";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -20,15 +19,8 @@ export async function ingestFacebook(accountId: string, onProgress?: (msg: strin
     throw new Error("Account not found or not Facebook");
   }
 
-  let tokens: { access_token: string; refresh_token?: string; token_expires_at?: number };
-  try {
-    tokens = decryptTokens(account.encrypted_tokens);
-  } catch {
-    throw new Error("Failed to decrypt tokens");
-  }
-
-  const accessToken = tokens.access_token;
-  const pageId = account.external_account_id;
+  const accessToken: string = account.access_token;
+  const pageId = account.platform_account_id;
 
   onProgress?.("Syncing posts...");
 
@@ -40,12 +32,11 @@ export async function ingestFacebook(accountId: string, onProgress?: (msg: strin
     permalink_url?: string;
     type?: string;
   }> = [];
-  let nextUrl: string | null = `https://graph.facebook.com/v18.0/${pageId}/feed?fields=id,message,created_time,full_picture,permalink_url,type&limit=50`;
+  let nextUrl: string | null =
+    `https://graph.facebook.com/v18.0/${pageId}/feed?fields=id,message,created_time,full_picture,permalink_url,type&limit=50&access_token=${accessToken}`;
 
   while (nextUrl) {
-    const res = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const res = await fetch(nextUrl);
 
     if (!res.ok) {
       const err = await res.text();
@@ -64,121 +55,55 @@ export async function ingestFacebook(accountId: string, onProgress?: (msg: strin
 
   onProgress?.(`Syncing posts... ${posts.length}/${posts.length}`);
 
-  for (let i = 0; i < posts.length; i++) {
-    const p = posts[i];
-    const hashtags = extractHashtags(p.message ?? "");
+  const postRows = posts.map((p) => {
+    const contentType =
+      p.type === "video" ? "video" : p.type === "photo" ? "image" : "text";
 
-    const postType = p.type === "video" ? "video" : p.type === "photo" ? "image" : "text";
+    return {
+      user_id: account.user_id,
+      social_account_id: accountId,
+      platform: "facebook" as const,
+      platform_post_id: p.id,
+      content_type: contentType,
+      caption: p.message ?? null,
+      thumbnail_url: p.full_picture ?? null,
+      media_url: p.permalink_url ?? p.full_picture ?? null,
+      permalink: p.permalink_url ?? null,
+      posted_at: p.created_time ?? null,
+      metrics: { likes: 0, comments: 0, impressions: 0 },
+    };
+  });
 
-    await supabase.from("social_posts").upsert(
-      {
-        user_id: account.user_id,
-        social_account_id: accountId,
-        platform: "facebook",
-        post_type: postType,
-        title: null,
-        caption: p.message ?? null,
-        hashtags: hashtags.length ? hashtags : null,
-        thumbnail_url: p.full_picture ?? null,
-        media_url: p.permalink_url ?? p.full_picture ?? null,
-        published_at: p.created_time ?? null,
-        external_post_id: p.id,
-        raw_data: p as unknown as Record<string, unknown>,
-      },
-      { onConflict: "social_account_id,external_post_id" }
-    );
-
-    const { data: postRow } = await supabase
+  if (postRows.length > 0) {
+    const { error: postsErr } = await supabase
       .from("social_posts")
-      .select("id")
-      .eq("social_account_id", accountId)
-      .eq("external_post_id", p.id)
-      .single();
-
-    if (postRow) {
-      const insightsRes = await fetch(
-        `https://graph.facebook.com/v18.0/${p.id}/insights?metric=post_impressions,post_engaged_users&access_token=${accessToken}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-
-      let impressions = 0;
-      let engagement = 0;
-      if (insightsRes.ok) {
-        const insights = (await insightsRes.json()) as {
-          data?: Array<{ name: string; values?: Array<{ value?: number }> }>;
-        };
-        for (const m of insights.data ?? []) {
-          const val = m.values?.[0]?.value ?? 0;
-          if (m.name === "post_impressions") impressions = val;
-          if (m.name === "post_engaged_users") engagement = val;
-        }
-      }
-
-      const engagementRate = impressions > 0 ? (engagement / impressions) * 100 : 0;
-
-      await supabase.from("post_analytics").upsert(
-        {
-          social_post_id: postRow.id,
-          views: 0,
-          likes: 0,
-          comments: 0,
-          reach: impressions,
-          impressions,
-          engagement_rate: engagementRate,
-          fetched_at: new Date().toISOString(),
-        },
-        { onConflict: "social_post_id" }
-      );
-    }
-
-    onProgress?.(`Syncing posts... ${i + 1}/${posts.length}`);
+      .upsert(postRows, { onConflict: "platform,platform_post_id" });
+    if (postsErr) throw new Error(`Failed to save posts: ${postsErr.message}`);
   }
 
   onProgress?.("Pulling analytics...");
 
   const pageRes = await fetch(
-    `https://graph.facebook.com/v18.0/${pageId}?fields=fan_count&access_token=${accessToken}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    `https://graph.facebook.com/v18.0/${pageId}?fields=fan_count,name&access_token=${accessToken}`
   );
 
-  let followerCount = account.follower_count ?? 0;
+  const existingData = (account.account_data ?? {}) as Record<string, unknown>;
+  let updatedAccountData = { ...existingData };
+
   if (pageRes.ok) {
-    const pageData = (await pageRes.json()) as { fan_count?: number };
-    followerCount = pageData.fan_count ?? followerCount;
-    await supabase.from("audience_data").insert({
-      social_account_id: accountId,
-      follower_count: followerCount,
-      following_count: 0,
-      fetched_at: new Date().toISOString(),
-    });
+    const pageData = (await pageRes.json()) as { fan_count?: number; name?: string };
+    updatedAccountData = {
+      ...updatedAccountData,
+      followers_count: pageData.fan_count ?? existingData.followers_count ?? 0,
+    };
   }
-
-  const totalImpressions = 0;
-  const avgEngagement = 0;
-
-  await supabase.from("channel_analytics").insert({
-    social_account_id: accountId,
-    total_views: totalImpressions,
-    avg_engagement_rate: avgEngagement,
-    posting_frequency: posts.length,
-    top_content_types: ["text", "image", "video"],
-    fetched_at: new Date().toISOString(),
-  });
 
   await supabase
     .from("social_accounts")
     .update({
-      sync_status: "synced",
-      sync_progress: null,
-      sync_error: null,
+      account_data: updatedAccountData,
       last_synced_at: new Date().toISOString(),
-      follower_count: followerCount,
       updated_at: new Date().toISOString(),
     })
     .eq("id", accountId);
-}
-
-function extractHashtags(text: string): string[] {
-  const matches = text.match(/#[\w]+/g) ?? [];
-  return [...new Set(matches.map((m) => m.slice(1)))];
 }

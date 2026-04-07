@@ -1,926 +1,1040 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { PageTransition } from "@/components/ui";
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { OverviewData, PatternBar } from "@/lib/dashboard-data";
+import type { AIAnalysis } from "./page";
+import { AIBriefingBanner } from "@/components/dashboard/AIBriefingBanner";
+import { useUserGoal } from "@/lib/context/UserGoalContext";
 
-// ─── DEV TOGGLE ───────────────────────────────────────────────────────────────
-// Flip to `false` to see the empty state.
-const hasData = true;
-
-// ─── Sample data (used when hasData = true) ───────────────────────────────────
-const SAMPLE_STATS = {
-  totalViews: 284_000,
-  totalEngagements: 18_400,
-  clipsCreated: 12,
-  avgVirality: 7.4,
+// ─── Tokens ───────────────────────────────────────────────────────────────────
+const BG = "#080808";
+const CARD: React.CSSProperties = {
+  background: "#111111",
+  border: "1px solid rgba(255,255,255,0.07)",
+  borderRadius: "20px",
+  boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset",
+};
+const TABLE_SURFACE: React.CSSProperties = {
+  background: "#111111",
+  border: "1px solid rgba(255,255,255,0.07)",
+  borderRadius: "12px",
+  overflow: "hidden",
+};
+const C = {
+  text: "#F0F0F8",
+  sub: "#9090AA",
+  muted: "#5A5A78",
+  border: "rgba(255,255,255,0.07)",
+  purple: "#7C5CFC",
+  green: "#10B981",
+  red: "#EF4444",
+  amber: "#F59E0B",
+  ig: "#E1306C",
+  tt: "#20D9D2",
 };
 
-const SAMPLE_CHART_7D = [
-  { day: "Mon", value: 1200, date: "2026-02-23" },
-  { day: "Tue", value: 1850, date: "2026-02-24" },
-  { day: "Wed", value: 2400, date: "2026-02-25" },
-  { day: "Thu", value: 1640, date: "2026-02-26" },
-  { day: "Fri", value: 3200, date: "2026-02-27" },
-  { day: "Sat", value: 2780, date: "2026-02-28" },
-  { day: "Sun", value: 3620, date: "2026-03-01" },
-];
-
-const SAMPLE_CHART_30D = [
-  820, 940, 1100, 980, 1280, 1420, 1350, 1180, 1320, 1500,
-  1680, 1420, 1550, 1800, 1700, 1650, 1900, 2100, 1980, 2200,
-  2400, 2250, 2100, 2600, 2450, 2800, 3000, 2750, 3200, 3620,
-].map((value, i) => ({
-  day: `${i + 1}`,
-  value,
-  date: `2026-02-${String(i + 1).padStart(2, "0")}`,
-}));
-
-const SAMPLE_TOP_CONTENT: Array<{
-  id?: string;
-  caption?: string | null;
-  metrics?: Record<string, number>;
-  totalEngagement?: number;
-  permalink?: string | null;
-}> = [
-  { id: "1", caption: "Morning routine that changed my life", metrics: { views: 84_000, likes: 5800, comments: 400 }, totalEngagement: 6200 },
-  { id: "2", caption: "Behind the scenes of my content setup", metrics: { views: 61_000, likes: 4500, comments: 300 }, totalEngagement: 4800 },
-  { id: "3", caption: "3 growth hacks: 10K followers in 30 days", metrics: { views: 48_000, likes: 3600, comments: 300 }, totalEngagement: 3900 },
-  { id: "4", caption: "Honest product review — worth the hype?", metrics: { views: 32_000, likes: 1900, comments: 200 }, totalEngagement: 2100 },
-];
-
-const SAMPLE_ACTIVITY = [
-  { id: "1", type: "sync", description: "New post synced from Instagram — 2.4K likes", created_at: new Date(Date.now() - 15 * 60_000).toISOString() },
-  { id: "2", type: "analysis", description: "AI deep dive analysis completed", created_at: new Date(Date.now() - 2 * 3_600_000).toISOString() },
-  { id: "3", type: "connect", description: "TikTok account connected", created_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
-  { id: "4", type: "plan", description: "Weekly plan generated for March", created_at: new Date(Date.now() - 86_400_000).toISOString() },
-  { id: "5", type: "clip", description: "3 new clips extracted from latest video", created_at: new Date(Date.now() - 2 * 86_400_000).toISOString() },
-];
-
-const SAMPLE_GOAL = {
-  statement: "Grow Instagram to 10K followers",
-  currentValue: 5_280,
-  goalValue: 10_000,
-  unit: "followers",
-  gainedToday: 47,
-  sevenDayAvg: 142,
-  dailyNeeded: 165,
-  daysLeft: 62,
-};
-
-// ─── Design tokens ─────────────────────────────────────────────────────────────
-const GLASS_CARD: React.CSSProperties = {
-  background: "rgba(255, 255, 255, 0.06)",
-  backdropFilter: "blur(12px) saturate(180%)",
-  WebkitBackdropFilter: "blur(12px) saturate(180%)",
-  border: "1px solid rgba(255, 255, 255, 0.08)",
-  borderRadius: "16px",
-  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-};
-
-const FLOATING_BAR: React.CSSProperties = {
-  width: "100%",
-  maxWidth: "520px",
-  background: "rgba(10, 10, 10, 0.88)",
-  backdropFilter: "blur(16px) saturate(180%)",
-  WebkitBackdropFilter: "blur(16px) saturate(180%)",
-  border: "1px solid rgba(255, 255, 255, 0.08)",
-  borderRadius: "14px",
-  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
-  left: "calc(50% + 28px)",
-  transform: "translateX(-50%)",
-};
-
-const TIMEFRAME_LABELS: Record<string, string> = {
-  "1_month": "1 month",
-  "3_months": "3 months",
-  "6_months": "6 months",
-  "1_year": "1 year",
-  none: "No timeframe",
-};
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "morning";
-  if (h < 17) return "afternoon";
-  return "evening";
-}
-
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmt(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
   return n.toLocaleString();
 }
-
-function formatRelativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  const hours = Math.floor(diff / 3_600_000);
-  const days = Math.floor(diff / 86_400_000);
-  if (mins < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+function fmtRange(lo: number, hi: number) {
+  return `${fmt(lo)}–${fmt(hi)}`;
+}
+function pLabel(p: string) {
+  if (p === "instagram") return "IG";
+  if (p === "tiktok") return "TT";
+  if (p === "youtube") return "YT";
+  return p.slice(0, 2).toUpperCase();
+}
+function pColor(p: string) {
+  if (p === "instagram") return C.ig;
+  if (p === "tiktok") return C.tt;
+  return C.purple;
 }
 
-function buildChartPath(
-  data: { value: number }[],
-  w: number,
-  h: number
-): string {
-  if (data.length < 2) return "";
-  const maxVal = Math.max(...data.map((d) => d.value), 1);
-  const pts = data.map((d, i) => ({
-    x: (i / (data.length - 1)) * w,
-    y: h - (d.value / maxVal) * h * 0.8 - h * 0.1,
-  }));
-  let path = `M${pts[0].x},${pts[0].y}`;
-  for (let i = 1; i < pts.length; i++) {
-    const cp1x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) / 3;
-    const cp2x = pts[i].x - (pts[i].x - pts[i - 1].x) / 3;
-    path += ` C${cp1x},${pts[i - 1].y} ${cp2x},${pts[i].y} ${pts[i].x},${pts[i].y}`;
-  }
-  return path;
+// ─── Tiny atoms ───────────────────────────────────────────────────────────────
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: C.muted }}>
+      {children}
+    </p>
+  );
 }
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
-export interface GoalProgress {
-  statement: string;
-  currentValue: number;
-  goalValue: number;
-  unit: string;
-  gainedToday: number;
-  sevenDayAvg: number;
-  dailyNeeded: number;
-  daysLeft: number;
+function Divider() {
+  return <div style={{ height: "1px", background: "rgba(255,255,255,0.07)" }} />;
 }
 
-export interface DashboardData {
-  hasData: boolean;
-  stats: {
-    totalViews: number;
-    totalEngagements: number;
-    clipsCreated: number;
-    avgVirality: number;
-  };
-  chartData: { day: string; value: number; date: string }[];
-  topContent: Array<{
-    id?: string;
-    caption?: string | null;
-    metrics?: Record<string, number>;
-    totalEngagement?: number;
-    permalink?: string | null;
-  }>;
-  recentActivity: Array<{
-    id?: string;
-    type: string;
-    description: string;
-    created_at: string;
-  }>;
-  annotations: Record<string, string>;
+function IGLogo({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="igg" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0%" stopColor="#f09433" />
+          <stop offset="50%" stopColor="#dc2743" />
+          <stop offset="100%" stopColor="#bc1888" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="20" height="20" rx="5" fill="url(#igg)" />
+      <circle cx="12" cy="12" r="4" fill="none" stroke="white" strokeWidth="1.5" />
+      <circle cx="17.5" cy="6.5" r="1.1" fill="white" />
+    </svg>
+  );
 }
 
-export interface OverviewClientProps {
-  dashboardData: DashboardData;
-  firstName: string;
-  goalsRaw: string | null;
-  goalsTimeframe: string | null;
-  hasConnectedAccounts: boolean;
-  goalProgress: GoalProgress | null;
+function TTLogo({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="white">
+      <rect width="24" height="24" rx="5" fill="#010101" />
+      <path
+        d="M16.5 5h-2.1v9.1a2.4 2.4 0 01-2.4 2.3 2.4 2.4 0 01-2.4-2.3 2.4 2.4 0 012.4-2.3c.22 0 .43.03.63.08V9.6a4.5 4.5 0 00-.63-.04 4.5 4.5 0 00-4.5 4.5 4.5 4.5 0 004.5 4.5 4.5 4.5 0 004.5-4.5V9.1a6.3 6.3 0 003.7 1.2V8.2A4.2 4.2 0 0116.5 5z"
+        fill="white"
+      />
+    </svg>
+  );
 }
 
-// ─── Component ─────────────────────────────────────────────────────────────────
-export function OverviewClient({
-  dashboardData,
-  firstName,
-  goalsRaw,
-  goalsTimeframe,
-  goalProgress: realGoalProgress,
-}: OverviewClientProps) {
-  const router = useRouter();
-  const [chartPeriod, setChartPeriod] = useState<"7D" | "30D">("7D");
+function PIcon({ platform, size = 18 }: { platform: string; size?: number }) {
+  if (platform === "instagram") return <IGLogo size={size} />;
+  if (platform === "tiktok") return <TTLogo size={size} />;
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: 5,
+        background: C.purple, display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 9, fontWeight: 700, color: "white",
+      }}
+    >
+      {pLabel(platform)}
+    </div>
+  );
+}
 
-  const greeting = firstName
-    ? `Good ${getGreeting()}, ${firstName}`
-    : `Good ${getGreeting()}`;
+function Bars({ bars }: { bars: PatternBar[] }) {
+  const max = Math.max(...bars.map(b => b.avgViews), 1);
+  return (
+    <div className="space-y-2.5">
+      {bars.map(b => (
+        <div key={b.label} className="flex items-center gap-3">
+          <span className="text-[12px] w-24 shrink-0 text-right" style={{ color: C.sub }}>{b.label}</span>
+          <div className="flex-1 h-[18px] rounded-sm overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <div
+              className="h-full"
+              style={{
+                width: `${Math.max(4, Math.round((b.avgViews / max) * 100))}%`,
+                background: b.isTop
+                  ? "linear-gradient(90deg, #16a34a, #4ADE80)"
+                  : "linear-gradient(90deg, #991b1b, #F87171)",
+                borderRadius: "2px",
+              }}
+            />
+          </div>
+          <span
+            className="text-[12px] w-12 shrink-0 text-right font-medium tabular-nums"
+            style={{ color: b.isTop ? C.green : C.red }}
+          >
+            {fmt(b.avgViews)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-  // When hasData = true, use sample data; otherwise use real props data.
-  const effectiveGoal: GoalProgress | null = hasData ? SAMPLE_GOAL : realGoalProgress;
-  const effectiveStats = hasData ? SAMPLE_STATS : dashboardData.stats;
-  const rawChartData = hasData
-    ? chartPeriod === "7D"
-      ? SAMPLE_CHART_7D
-      : SAMPLE_CHART_30D
-    : dashboardData.chartData;
-  const effectiveTopContent = hasData
-    ? SAMPLE_TOP_CONTENT
-    : dashboardData.topContent;
-  const effectiveActivity = hasData
-    ? SAMPLE_ACTIVITY
-    : dashboardData.recentActivity;
+function Skeleton() {
+  return (
+    <div className="space-y-2.5">
+      {[100, 72, 48].map(w => (
+        <div
+          key={w}
+          className="h-3 rounded animate-pulse"
+          style={{ width: `${w}%`, background: "rgba(255,255,255,0.08)" }}
+        />
+      ))}
+    </div>
+  );
+}
 
-  const chartPath = buildChartPath(rawChartData, 500, 150);
-  const areaPath = chartPath ? `${chartPath} L500,150 L0,150 Z` : "";
+// ─── Main ─────────────────────────────────────────────────────────────────────
+interface Props {
+  overviewData: OverviewData;
+  aiAnalysis: AIAnalysis | null;
+  displayName: string;
+  userEmail: string;
+}
 
-  const kpiCards = [
-    {
-      label: "Total Views",
-      value: hasData ? formatNumber(effectiveStats.totalViews) : "—",
-      badge: hasData ? "+18%" : "No data",
-      badgeColor: hasData ? "#81C784" : "#6B6B80",
-    },
-    {
-      label: "Engagements",
-      value: hasData ? formatNumber(effectiveStats.totalEngagements) : "—",
-      badge: hasData ? "+23%" : "No data",
-      badgeColor: hasData ? "#81C784" : "#6B6B80",
-    },
-    {
-      label: "Clips Created",
-      value: hasData ? String(effectiveStats.clipsCreated) : "—",
-      badge: hasData ? "This week" : "No data",
-      badgeColor: hasData ? "#9898B0" : "#6B6B80",
-    },
-    {
-      label: "Avg Virality",
-      value: hasData ? effectiveStats.avgVirality.toFixed(1) : "—",
-      badge: hasData ? "Score" : "No data",
-      badgeColor: hasData ? "#FFB74D" : "#6B6B80",
-    },
-  ];
+export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, displayName }: Props) {
+  const { channels, combined, followerGrowth, topPerformers, allPosts, crossPlatform, patternEvidence, competitors } = overviewData;
+
+  const availablePlatforms = [...new Set(allPosts.map(p => p.platform))];
+  const [activeTab, setActiveTab] = useState(() => availablePlatforms[0] ?? "tiktok");
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(initialAiAnalysis);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const { refreshSignal, consumeRefresh, setChatContext } = useUserGoal();
+  const prevSignalRef = useRef(refreshSignal);
+
+  const runRefresh = useCallback(() => {
+    if (allPosts.length < 3) {
+      console.log("[OverviewClient] skipping refresh — fewer than 3 posts");
+      return;
+    }
+    console.log("[OverviewClient] calling /api/overview/refresh");
+    setIsRefreshing(true);
+    fetch("/api/overview/refresh", { method: "POST" })
+      .then((r) => r.json())
+      .then((data: { analysis?: AIAnalysis | null }) => {
+        console.log("[OverviewClient] refresh response:", data.analysis ? "got analysis" : "no analysis");
+        if (data.analysis) setAiAnalysis(data.analysis);
+      })
+      .catch((err) => console.error("[OverviewClient] refresh error:", err))
+      .finally(() => setIsRefreshing(false));
+  }, [allPosts.length]);
+
+  // Catch refresh signals that fired while this component was unmounted
+  useEffect(() => {
+    if (consumeRefresh()) {
+      console.log("[OverviewClient] consumed pending refresh from before mount");
+      runRefresh();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    console.log("[OverviewClient] refreshSignal changed:", refreshSignal, "prev:", prevSignalRef.current);
+    if (refreshSignal === prevSignalRef.current) return;
+    prevSignalRef.current = refreshSignal;
+    runRefresh();
+  }, [refreshSignal, runRefresh]);
+
+  const hasAccounts = channels.length > 0;
+  const dateStr = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+  const displayChannels = hasAccounts
+    ? channels
+    : [
+        { platform: "instagram", username: "your_instagram", followers: 0, followerGrowthPct: 0, postCount: 0, totalViews: 0, totalLikes: 0, totalComments: 0, totalShares: 0 },
+        { platform: "tiktok", username: "your_tiktok", followers: 0, followerGrowthPct: 0, postCount: 0, totalViews: 0, totalLikes: 0, totalComments: 0, totalShares: 0 },
+      ];
+
+  const availableTabs = availablePlatforms;
+  const tabPosts = allPosts.filter(p => p.platform === activeTab);
 
   return (
-    <PageTransition>
-      <div className="min-h-screen">
-        <div className="max-w-5xl mx-auto px-6 py-8 pb-32 space-y-5">
+    <div className="min-h-screen" style={{ background: BG }}>
 
-          {/* ── Greeting ──────────────────────────────────────────────────── */}
+      <div className="relative z-10 max-w-[960px] mx-auto px-8 py-7 space-y-0">
+
+        {/* ── Morning brief ───────────────────────────────────────────────── */}
+        <AIBriefingBanner />
+
+        {/* ── Header ──────────────────────────────────────────────────────── */}
+        <div className="flex items-start justify-between pb-6">
           <div>
-            <h1
-              className="text-2xl font-semibold tracking-tight"
-              style={{ color: "#E8E8F0" }}
-            >
-              {greeting}
-            </h1>
-            <p className="text-sm mt-1" style={{ color: "#6B6B80" }}>
-              Here&apos;s your overview for today.
+            <h1 className="text-xl font-bold tracking-tight" style={{ color: C.text }}>{displayName}</h1>
+            <p className="text-[13px] mt-0.5" style={{ color: C.sub }}>
+              {hasAccounts
+                ? channels.map(c => `@${c.username}`).join("  ·  ")
+                : "Social media analytics"}
             </p>
           </div>
+          <span className="text-[13px] mt-1" style={{ color: C.muted }}>{dateStr}</span>
+        </div>
 
-          {/* ── Goals Card ────────────────────────────────────────────────── */}
-          <div className="p-5" style={GLASS_CARD}>
-            {!effectiveGoal && !goalsRaw ? (
-              <div>
-                <h3
-                  className="text-sm font-semibold mb-1"
-                  style={{ color: "#E8E8F0" }}
+        {/* ── Connect banner ──────────────────────────────────────────────── */}
+        {!hasAccounts && (
+          <div className="mb-5">
+            <a
+              href="/dashboard/accounts"
+              className="flex items-center justify-between px-4 py-3 rounded-lg"
+              style={{
+                background: "rgba(124,92,252,0.12)",
+                border: "1px solid rgba(124,92,252,0.30)",
+              }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ background: C.purple, boxShadow: `0 0 6px ${C.purple}` }}
+                />
+                <span className="text-[13px] font-medium" style={{ color: C.text }}>
+                  Connect your accounts to populate this dashboard
+                </span>
+              </div>
+              <span className="text-[12px] font-semibold" style={{ color: C.purple }}>Connect →</span>
+            </a>
+          </div>
+        )}
+
+        {/* ── CHANNELS ────────────────────────────────────────────────────── */}
+        <section className="pb-7">
+          <Label>Channels</Label>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            {displayChannels.map((ch, i) => {
+              const accent = pColor(ch.platform);
+              return (
+                <div
+                  key={`${ch.platform}-${ch.username}-${i}`}
+                  style={{ ...CARD, borderTop: `2px solid ${accent}`, position: "relative", overflow: "hidden" }}
+                  className="p-5"
                 >
-                  Set your goals
-                </h3>
-                <p className="text-[13px] mb-4" style={{ color: "#6B6B80" }}>
-                  Tell your AI strategist what you&apos;re working toward
-                </p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {["Grow to 10K", "Get brand deals", "Go viral", "Launch product"].map(
-                    (pill) => (
+                  {/* Accent glow */}
+                  <div
+                    style={{
+                      position: "absolute", top: 0, left: 0, right: 0, height: "64px",
+                      background: `linear-gradient(180deg, ${accent}20 0%, transparent 100%)`,
+                      pointerEvents: "none",
+                    }}
+                  />
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                      <PIcon platform={ch.platform} size={20} />
+                      <span className="text-[13px] font-medium" style={{ color: C.sub }}>@{ch.username}</span>
+                    </div>
+                    {ch.followerGrowthPct !== 0 && (
                       <span
-                        key={pill}
-                        className="text-[12px] px-3 py-1.5 rounded-full"
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
                         style={{
-                          background: "rgba(255, 255, 255, 0.06)",
-                          backdropFilter: "blur(8px)",
-                          WebkitBackdropFilter: "blur(8px)",
-                          border: "1px solid rgba(255, 255, 255, 0.08)",
-                          color: "#9898B0",
+                          background: ch.followerGrowthPct > 0 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                          color: ch.followerGrowthPct > 0 ? C.green : C.red,
+                          border: `1px solid ${ch.followerGrowthPct > 0 ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)"}`,
                         }}
                       >
-                        {pill}
+                        {ch.followerGrowthPct > 0 ? "+" : ""}{ch.followerGrowthPct}%
                       </span>
-                    )
-                  )}
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { v: fmt(ch.followers), l: "FOLLOWERS" },
+                      { v: String(ch.postCount), l: ch.platform === "tiktok" ? "VIDEOS" : "POSTS" },
+                      { v: fmt(ch.totalViews), l: ch.platform === "tiktok" ? "TOTAL PLAYS" : "TOTAL VIEWS" },
+                    ].map((s, si) => (
+                      <div key={s.l}>
+                        <p className="text-[22px] font-bold tabular-nums tracking-tight" style={{ color: si === 0 ? accent : C.text }}>{s.v}</p>
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.1em] mt-0.5" style={{ color: C.muted }}>{s.l}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <Link
-                  href="/dashboard/chat"
-                  className="inline-block text-sm font-medium text-white px-4 py-2 transition-opacity hover:opacity-90"
-                  style={{
-                    background: "#7C5CFC",
-                    borderRadius: "12px",
-                    boxShadow: "0 4px 16px rgba(124, 92, 252, 0.3)",
-                  }}
+              );
+            })}
+          </div>
+        </section>
+
+        <Divider />
+
+        {/* ── ALL-TIME COMBINED ───────────────────────────────────────────── */}
+        <section className="py-7">
+          <Label>All-Time Combined</Label>
+          <div className="grid grid-cols-4 gap-3 mt-3">
+            {[
+              { label: "TOTAL VIEWS", value: fmt(combined.totalViews), key: "views", raw: combined.totalViews },
+              { label: "TOTAL LIKES", value: fmt(combined.totalLikes), key: "likes", raw: combined.totalLikes },
+              { label: "TOTAL COMMENTS", value: fmt(combined.totalComments), key: "comments", raw: combined.totalComments },
+              { label: "FOLLOWERS", value: fmt(combined.totalFollowers), key: "followers", raw: combined.totalFollowers },
+            ].map(card => {
+              const sub = Object.entries(combined.perPlatform)
+                .filter(([, v]) => {
+                  const n = card.key === "views" ? v.views : card.key === "likes" ? v.likes : card.key === "comments" ? v.comments : v.followers;
+                  return n > 0;
+                })
+                .map(([k, v]) => {
+                  const n = card.key === "views" ? v.views : card.key === "likes" ? v.likes : card.key === "comments" ? v.comments : v.followers;
+                  return `${pLabel(k)} ${fmt(n)}`;
+                })
+                .join("  +  ");
+              const detail = sub ? `${card.raw.toLocaleString()} (${sub})` : card.raw.toLocaleString();
+              return (
+                <div
+                  key={card.label}
+                  style={{ ...CARD, position: "relative" }}
+                  className="p-4 group"
                 >
-                  Set Goals →
-                </Link>
+                  <div className="flex items-start justify-between">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.12em] mb-3" style={{ color: C.muted }}>{card.label}</p>
+                    <button
+                      type="button"
+                      onClick={() => setChatContext({ label: card.label, value: card.value, detail })}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 -mr-0.5 w-5 h-5 rounded-md flex items-center justify-center"
+                      style={{ background: "rgba(124,92,252,0.10)", border: "1px solid rgba(124,92,252,0.2)", color: "#7C5CFC", fontSize: "10px" }}
+                      title="Add to chat"
+                    >
+                      ✦
+                    </button>
+                  </div>
+                  <p className="text-[26px] font-bold tabular-nums tracking-tight" style={{ color: C.text }}>{card.value}</p>
+                  {sub && <p className="text-[10px] mt-1.5 font-medium" style={{ color: C.muted }}>{sub}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <Divider />
+
+        {/* ── FOLLOWER GROWTH ─────────────────────────────────────────────── */}
+        {followerGrowth.some(fg => fg.weeks.length > 1) && (
+          <>
+            <section className="py-7">
+              <Label>Follower Growth</Label>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                {followerGrowth.map(fg => {
+                  if (fg.weeks.length < 2) return null;
+                  const max = Math.max(...fg.weeks.map(w => w.count), 1);
+                  const accent = pColor(fg.platform);
+                  return (
+                    <div key={fg.platform} style={CARD} className="p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <PIcon platform={fg.platform} size={16} />
+                        <span className="text-[12px] font-semibold capitalize" style={{ color: C.sub }}>
+                          {fg.platform === "tiktok" ? "TikTok" : "Instagram"} Followers
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {fg.weeks.map(w => (
+                          <div key={w.label} className="flex items-center gap-2">
+                            <span className="text-[11px] w-12 shrink-0" style={{ color: C.muted }}>{w.label}</span>
+                            <div className="flex-1 h-[14px] rounded-sm overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                              <div
+                                className="h-full rounded-sm"
+                                style={{
+                                  width: `${Math.max(3, Math.round((w.count / max) * 100))}%`,
+                                  background: `linear-gradient(90deg, ${accent}80, ${accent})`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-[11px] w-14 text-right shrink-0 tabular-nums font-medium" style={{ color: C.sub }}>
+                              {w.count.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : effectiveGoal ? (
-              (() => {
-                const g = effectiveGoal;
-                const pct = Math.round((g.currentValue / g.goalValue) * 100);
-                const pace = g.sevenDayAvg >= g.dailyNeeded * 0.95
-                  ? g.sevenDayAvg >= g.dailyNeeded
-                    ? "ahead"
-                    : "on_track"
-                  : "behind";
-                const paceLabel = pace === "ahead" ? "Ahead of pace" : pace === "on_track" ? "On track" : "Behind pace";
-                const paceColor = pace === "behind" ? "#FFB74D" : "#81C784";
+            </section>
+            <Divider />
+          </>
+        )}
 
-                const metrics = [
-                  {
-                    label: "Gained today",
-                    value: `+${g.gainedToday}`,
-                    sub: g.unit,
-                    highlight: true,
-                  },
-                  {
-                    label: "7-day avg",
-                    value: `+${g.sevenDayAvg}`,
-                    sub: "per day",
-                    highlight: false,
-                  },
-                  {
-                    label: "Needed daily",
-                    value: `+${g.dailyNeeded}`,
-                    sub: "to hit goal",
-                    highlight: false,
-                  },
-                  {
-                    label: "Days left",
-                    value: String(g.daysLeft),
-                    sub: "remaining",
-                    highlight: false,
-                  },
-                ];
-
-                return (
-                  <div>
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-widest mb-1" style={{ color: "#6B6B80" }}>
-                          Active Goal
-                        </p>
-                        <h3 className="text-[15px] font-semibold" style={{ color: "#E8E8F0" }}>
-                          {g.statement}
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0 ml-4 mt-0.5">
-                        <span
-                          className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                          style={{ background: paceColor + "18", color: paceColor, border: `1px solid ${paceColor}30` }}
-                        >
-                          {paceLabel}
-                        </span>
-                        <Link
-                          href="/dashboard/chat"
-                          className="text-[11px] transition-colors hover:opacity-80"
-                          style={{ color: "#6B6B80" }}
-                        >
-                          Edit
-                        </Link>
-                      </div>
+        {/* ── TOP PERFORMERS ──────────────────────────────────────────────── */}
+        {topPerformers.length > 0 && (
+          <>
+            <section className="py-7">
+              <Label>Top Performers (Combined Platforms)</Label>
+              <div className="grid grid-cols-3 gap-3 mt-3">
+                {topPerformers.slice(0, 3).map((p, i) => (
+                  <div key={p.id} style={CARD} className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span
+                        className="text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                        style={{
+                          background: i === 0 ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.06)",
+                          color: i === 0 ? C.amber : C.muted,
+                          border: `1px solid ${i === 0 ? "rgba(245,158,11,0.35)" : "rgba(255,255,255,0.10)"}`,
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      <PIcon platform={p.platform} size={14} />
                     </div>
-
-                    {/* Progress bar */}
-                    <div className="mb-1">
-                      <div className="flex justify-between mb-1.5">
-                        <span className="text-[12px]" style={{ color: "#9898B0" }}>
-                          {g.currentValue.toLocaleString()} / {g.goalValue.toLocaleString()} {g.unit}
-                        </span>
-                        <span className="text-[12px] font-medium" style={{ color: "#9898B0" }}>
-                          {pct}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
-                        <div
-                          className="h-1.5 rounded-full"
-                          style={{ width: `${pct}%`, background: "linear-gradient(to right, #7C5CFC, #A78BFA)" }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Metric row */}
-                    <div className="grid grid-cols-4 gap-3 mt-4 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                      {metrics.map((m) => (
-                        <div key={m.label}>
-                          <p className="text-[11px] mb-1" style={{ color: "#6B6B80" }}>{m.label}</p>
-                          <p
-                            className="text-lg font-bold tracking-tight"
-                            style={{ color: m.highlight ? "#E8E8F0" : "#9898B0" }}
-                          >
-                            {m.value}
-                          </p>
-                          <p className="text-[11px] mt-0.5" style={{ color: "#6B6B80" }}>{m.sub}</p>
+                    <p className="text-[13px] font-medium leading-snug mb-3 line-clamp-2" style={{ color: C.text }}>
+                      {p.caption}
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                      {[
+                        { l: "VIEWS", v: fmt(p.views) },
+                        { l: "LIKES", v: fmt(p.likes) },
+                        { l: "COMMENTS", v: fmt(p.comments) },
+                        { l: "SHARES", v: fmt(p.shares) },
+                      ].map(s => (
+                        <div key={s.l}>
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.muted }}>{s.l}</p>
+                          <p className="text-[13px] font-semibold tabular-nums mt-0.5" style={{ color: C.sub }}>{s.v}</p>
                         </div>
                       ))}
                     </div>
                   </div>
-                );
-              })()
-            ) : (
-              // Goal text set but not yet parseable as tracked metric
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-[11px] uppercase tracking-widest mb-1" style={{ color: "#6B6B80" }}>
-                    Active Goal
-                  </p>
-                  <p className="text-[15px] font-semibold" style={{ color: "#E8E8F0" }}>
-                    {goalsRaw}
-                  </p>
-                  <p className="text-[12px] mt-2" style={{ color: "#6B6B80" }}>
-                    Connect your accounts so Clack can track your progress automatically.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 ml-4">
-                  <span className="text-[11px]" style={{ color: "#6B6B80" }}>
-                    ⏱ {TIMEFRAME_LABELS[goalsTimeframe ?? ""] ?? "3 months"}
-                  </span>
-                  <Link href="/dashboard/chat" className="text-[11px] hover:opacity-80" style={{ color: "#6B6B80" }}>
-                    Edit
-                  </Link>
-                </div>
+                ))}
               </div>
-            )}
-          </div>
+            </section>
+            <Divider />
+          </>
+        )}
 
-          {/* ── KPI Stats ─────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {kpiCards.map((card) => (
-              <div key={card.label} className="p-4" style={GLASS_CARD}>
-                <p
-                  className="text-[12px] mb-2"
-                  style={{ color: "#9898B0" }}
-                >
-                  {card.label}
-                </p>
-                <p
-                  className="text-3xl font-bold tracking-tight mb-1"
-                  style={{
-                    color: hasData
-                      ? "#E8E8F0"
-                      : "rgba(232,232,240,0.18)",
-                  }}
-                >
-                  {card.value}
-                </p>
-                <span
-                  className="text-[11px]"
-                  style={{ color: card.badgeColor }}
-                >
-                  {card.badge}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Performance Chart ─────────────────────────────────────────── */}
-          <div className="p-5" style={GLASS_CARD}>
-            <div className="flex items-center justify-between mb-4">
-              <span
-                className="text-sm font-semibold"
-                style={{ color: "#E8E8F0" }}
-              >
-                Performance
-              </span>
-              {hasData && (
-                <div
-                  className="flex gap-0.5 p-0.5 rounded-lg"
-                  style={{
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  {(["7D", "30D"] as const).map((period) => (
+        {/* ── ALL POSTS ───────────────────────────────────────────────────── */}
+        {allPosts.length > 0 && (
+          <>
+            <section className="py-7">
+              <div className="flex items-center justify-between mb-3">
+                <Label>All Posts</Label>
+                <div className="flex gap-1">
+                  {(availableTabs.length > 0 ? availableTabs : ["instagram", "tiktok"]).map(tab => (
                     <button
-                      key={period}
+                      key={tab}
                       type="button"
-                      onClick={() => setChartPeriod(period)}
-                      className="px-2.5 py-1 text-[12px] font-medium rounded-md transition-all duration-150"
+                      onClick={() => setActiveTab(tab)}
+                      className="px-3 py-1 text-[11px] font-semibold capitalize rounded-md transition-all"
                       style={{
-                        background:
-                          chartPeriod === period ? "#7C5CFC" : "transparent",
-                        color:
-                          chartPeriod === period ? "#fff" : "#6B6B80",
-                        boxShadow:
-                          chartPeriod === period
-                            ? "0 2px 8px rgba(124,92,252,0.3)"
-                            : "none",
+                        background: activeTab === tab ? "rgba(124,92,252,0.20)" : "transparent",
+                        color: activeTab === tab ? "#C4B5FD" : C.muted,
+                        border: `1px solid ${activeTab === tab ? "rgba(124,92,252,0.35)" : "rgba(255,255,255,0.07)"}`,
                       }}
                     >
-                      {period}
+                      {tab}
                     </button>
                   ))}
                 </div>
-              )}
-            </div>
-
-            {hasData ? (
-              <>
-                <svg
-                  viewBox="0 0 500 150"
-                  className="w-full h-40"
-                  preserveAspectRatio="none"
-                >
-                  <defs>
-                    <linearGradient
-                      id="areaGrad"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="rgba(124,92,252,0.20)"
-                      />
-                      <stop offset="100%" stopColor="transparent" />
-                    </linearGradient>
-                  </defs>
-                  {[37, 75, 112].map((y) => (
-                    <line
-                      key={y}
-                      x1="0"
-                      y1={y}
-                      x2="500"
-                      y2={y}
-                      stroke="rgba(255,255,255,0.04)"
-                      strokeWidth="1"
-                    />
-                  ))}
-                  {areaPath && (
-                    <path d={areaPath} fill="url(#areaGrad)" />
-                  )}
-                  {chartPath && (
-                    <path
-                      d={chartPath}
-                      fill="none"
-                      stroke="#7C5CFC"
-                      strokeWidth="2"
-                    />
-                  )}
-                  {rawChartData.length > 0 &&
-                    (() => {
-                      const last = rawChartData[rawChartData.length - 1];
-                      const maxVal = Math.max(
-                        ...rawChartData.map((d) => d.value),
-                        1
-                      );
-                      const cy =
-                        150 - (last.value / maxVal) * 120 - 15;
-                      return (
-                        <>
-                          <circle
-                            cx={500}
-                            cy={cy}
-                            r="5"
-                            fill="rgba(10,10,10,0.9)"
-                            stroke="#7C5CFC"
-                            strokeWidth="2"
-                          />
-                          <circle
-                            cx={500}
-                            cy={cy}
-                            r="2.5"
-                            fill="#7C5CFC"
-                          />
-                        </>
-                      );
-                    })()}
-                </svg>
-                {chartPeriod === "7D" && (
-                  <div className="flex justify-between mt-2">
-                    {rawChartData.map((d) => (
-                      <span
-                        key={d.date}
-                        className="text-[11px]"
-                        style={{ color: "#6B6B80" }}
+              </div>
+              <div style={TABLE_SURFACE}>
+                <table className="w-full">
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                      {["POST", "VIEWS", "LIKES", "COMMENTS", "ENG%"].map(h => (
+                        <th
+                          key={h}
+                          className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]"
+                          style={{ color: C.muted }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tabPosts.slice(0, 20).map((p, i) => (
+                      <tr
+                        key={p.id}
+                        style={{
+                          borderBottom: i < Math.min(tabPosts.length, 20) - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                        }}
                       >
-                        {d.day}
+                        <td className="px-4 py-2.5 max-w-xs">
+                          <div className="flex items-center gap-2">
+                            {p.isViral && (
+                              <span
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wide"
+                                style={{
+                                  background: "rgba(245,158,11,0.18)",
+                                  color: C.amber,
+                                  border: "1px solid rgba(245,158,11,0.35)",
+                                }}
+                              >
+                                VIRAL
+                              </span>
+                            )}
+                            <span className="text-[13px] truncate" style={{ color: C.sub }}>{p.caption}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 tabular-nums text-[13px] font-medium" style={{ color: C.text }}>{fmt(p.views)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{fmt(p.likes)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{fmt(p.comments)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{p.engagementRate.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                    {tabPosts.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-10 text-center text-[13px]" style={{ color: C.muted }}>
+                          No posts for this platform yet
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <Divider />
+          </>
+        )}
+
+        {/* ── CROSS-PLATFORM COMPARISON ───────────────────────────────────── */}
+        {crossPlatform.length > 0 && (
+          <>
+            <section className="py-7">
+              <Label>Cross-Platform Comparison</Label>
+              <div style={TABLE_SURFACE} className="mt-3">
+                <table className="w-full">
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                      {["POST", "IG VIEWS", "TT PLAYS", "IG ENG%", "TT ENG%", "WINNER"].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.muted }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {crossPlatform.map((row, i) => (
+                      <tr key={i} style={{ borderBottom: i < crossPlatform.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                        <td className="px-4 py-2.5 max-w-[200px]">
+                          <span className="text-[13px] truncate block" style={{ color: C.sub }}>{row.title}</span>
+                        </td>
+                        <td className="px-4 py-2.5 tabular-nums text-[13px] font-medium" style={{ color: C.ig }}>{fmt(row.igViews)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[13px] font-medium" style={{ color: C.tt }}>{fmt(row.ttPlays)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{row.igEngPct.toFixed(1)}%</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{row.ttEngPct.toFixed(1)}%</td>
+                        <td className="px-4 py-2.5">
+                          <span
+                            className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: row.winner === "ig" ? "rgba(225,48,108,0.15)" : "rgba(0,242,234,0.1)",
+                              color: row.winner === "ig" ? C.ig : C.tt,
+                              border: `1px solid ${row.winner === "ig" ? "rgba(225,48,108,0.3)" : "rgba(0,242,234,0.2)"}`,
+                            }}
+                          >
+                            {row.winner === "ig" ? "IG" : "TT"} ({row.multiplier})
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <Divider />
+          </>
+        )}
+
+        {/* ── COMPETITOR ANALYSIS ─────────────────────────────────────────── */}
+        {competitors.length > 0 && (
+          <>
+            <section className="py-7">
+              <div className="flex items-center justify-between mb-3">
+                <Label>Competitor Analysis</Label>
+                <a
+                  href="/dashboard/accounts"
+                  className="text-[11px] font-semibold"
+                  style={{ color: C.purple }}
+                >
+                  + Add Competitor
+                </a>
+              </div>
+
+              {/* Competitor cards */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {competitors.map((comp) => {
+                  const accent = pColor(comp.platform);
+                  // Find matching own channel for comparison
+                  const ownChannel = channels.find((c) => c.platform === comp.platform);
+                  const followerDiff = ownChannel
+                    ? comp.followers - ownChannel.followers
+                    : null;
+                  const followerDiffPct =
+                    ownChannel && ownChannel.followers > 0
+                      ? Math.round(((comp.followers - ownChannel.followers) / ownChannel.followers) * 100)
+                      : null;
+
+                  return (
+                    <div
+                      key={comp.id}
+                      style={{ ...CARD, position: "relative", overflow: "hidden" }}
+                      className="p-5"
+                    >
+                      <div
+                        style={{
+                          position: "absolute", top: 0, left: 0, right: 0, height: "1px",
+                          background: `linear-gradient(90deg, transparent, ${accent}40, transparent)`,
+                        }}
+                      />
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <PIcon platform={comp.platform} size={18} />
+                          <div>
+                            <p className="text-[13px] font-semibold" style={{ color: C.text }}>@{comp.username}</p>
+                            <p className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>Competitor</p>
+                          </div>
+                        </div>
+                        {followerDiffPct !== null && (
+                          <div className="text-right">
+                            <p
+                              className="text-[11px] font-semibold"
+                              style={{ color: followerDiff! > 0 ? C.red : C.green }}
+                            >
+                              {followerDiff! > 0 ? "+" : ""}{fmt(followerDiff!)} vs you
+                            </p>
+                            <p
+                              className="text-[10px]"
+                              style={{ color: followerDiff! > 0 ? C.red : C.green }}
+                            >
+                              {followerDiffPct > 0 ? "+" : ""}{followerDiffPct}%
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { v: fmt(comp.followers), l: "FOLLOWERS" },
+                          { v: String(comp.postCount), l: "POSTS" },
+                          { v: fmt(comp.avgViews), l: "AVG VIEWS" },
+                          { v: `${comp.avgEngRate.toFixed(1)}%`, l: "ENG RATE" },
+                        ].map((s) => (
+                          <div key={s.l}>
+                            <p className="text-[18px] font-bold tabular-nums tracking-tight" style={{ color: C.text }}>{s.v}</p>
+                            <p className="text-[9px] font-semibold uppercase tracking-[0.1em] mt-0.5" style={{ color: C.muted }}>{s.l}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* You vs Competitors comparison table */}
+              {channels.length > 0 && (
+                <div style={TABLE_SURFACE}>
+                  <table className="w-full">
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                        {["ACCOUNT", "PLATFORM", "FOLLOWERS", "AVG VIEWS", "ENG RATE", ""].map((h) => (
+                          <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.muted }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Your channels first */}
+                      {channels.map((ch, i) => {
+                        const totalEng = ch.totalLikes + ch.totalComments;
+                        const avgViews = ch.postCount > 0 ? Math.round(ch.totalViews / ch.postCount) : 0;
+                        const avgEng = ch.followers > 0 && ch.postCount > 0
+                          ? Math.round((totalEng / ch.postCount / ch.followers) * 1000) / 10
+                          : 0;
+                        return (
+                          <tr key={ch.platform} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <PIcon platform={ch.platform} size={14} />
+                                <span className="text-[13px] font-semibold" style={{ color: C.text }}>@{ch.username}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(124,92,252,0.15)", color: C.purple, border: "1px solid rgba(124,92,252,0.3)" }}>
+                                YOU
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 tabular-nums text-[13px] font-medium" style={{ color: C.text }}>{fmt(ch.followers)}</td>
+                            <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{fmt(avgViews)}</td>
+                            <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{avgEng.toFixed(1)}%</td>
+                            <td className="px-4 py-2.5" />
+                          </tr>
+                        );
+                      })}
+                      {/* Competitors */}
+                      {competitors.map((comp, i) => {
+                        const ownChannel = channels.find((c) => c.platform === comp.platform);
+                        const followerDiffPct = ownChannel && ownChannel.followers > 0
+                          ? Math.round(((comp.followers - ownChannel.followers) / ownChannel.followers) * 100)
+                          : null;
+                        const ahead = followerDiffPct !== null && followerDiffPct > 0;
+                        return (
+                          <tr
+                            key={comp.id}
+                            style={{ borderBottom: i < competitors.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}
+                          >
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <PIcon platform={comp.platform} size={14} />
+                                <span className="text-[13px]" style={{ color: C.sub }}>@{comp.username}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span
+                                className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                                style={{
+                                  background: "rgba(255,255,255,0.07)",
+                                  color: C.muted,
+                                  border: "1px solid rgba(255,255,255,0.12)",
+                                }}
+                              >
+                                COMP
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className="tabular-nums text-[13px] font-medium" style={{ color: C.text }}>{fmt(comp.followers)}</span>
+                                {followerDiffPct !== null && (
+                                  <span
+                                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                                    style={{
+                                      background: ahead ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)",
+                                      color: ahead ? C.red : C.green,
+                                      border: `1px solid ${ahead ? "rgba(239,68,68,0.35)" : "rgba(16,185,129,0.35)"}`,
+                                    }}
+                                  >
+                                    {ahead ? "+" : ""}{followerDiffPct}%
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{fmt(comp.avgViews)}</td>
+                            <td className="px-4 py-2.5 tabular-nums text-[13px]" style={{ color: C.sub }}>{comp.avgEngRate.toFixed(1)}%</td>
+                            <td className="px-4 py-2.5" />
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+            <Divider />
+          </>
+        )}
+
+        {/* ── PATTERN EVIDENCE ────────────────────────────────────────────── */}
+        {(patternEvidence.byFormat.length > 1 || patternEvidence.byTopic.length > 1) && (
+          <>
+            <section className="py-7">
+              <Label>Pattern Evidence</Label>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                {patternEvidence.byFormat.length > 1 && (
+                  <div style={CARD} className="p-5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] mb-4" style={{ color: C.muted }}>Format → Avg Views</p>
+                    <Bars bars={patternEvidence.byFormat} />
+                  </div>
+                )}
+                {patternEvidence.byTopic.length > 1 && (
+                  <div style={CARD} className="p-5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] mb-4" style={{ color: C.muted }}>Topic → Avg Views</p>
+                    <Bars bars={patternEvidence.byTopic} />
+                  </div>
+                )}
+              </div>
+            </section>
+            <Divider />
+          </>
+        )}
+
+        {/* ── THE PLAYBOOK ────────────────────────────────────────────────── */}
+        <section className="py-7">
+          <div className="flex items-center justify-between mb-0">
+            <Label>The Playbook</Label>
+            {isRefreshing && (
+              <span className="text-[11px] font-medium animate-pulse" style={{ color: "#A78BFA" }}>
+                ✦ Updating…
+              </span>
+            )}
+          </div>
+          <div style={{ ...CARD, opacity: isRefreshing ? 0.5 : 1, transition: "opacity 0.3s" }} className="mt-3 p-5">
+            {aiAnalysis ? (
+              <>
+                {aiAnalysis.playbook && (
+                  <>
+                <div className="grid grid-cols-2 gap-6 mb-5">
+                  <div>
+                    <p className="text-[11px] font-semibold mb-3" style={{ color: C.green }}>✓  Always</p>
+                    <ul className="space-y-2.5">
+                      {aiAnalysis.playbook.always.map((rule, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="text-[11px] mt-0.5 shrink-0" style={{ color: C.green }}>•</span>
+                          <span className="text-[13px] leading-snug" style={{ color: C.sub }}>{rule}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold mb-3" style={{ color: C.red }}>✗  Never</p>
+                    <ul className="space-y-2.5">
+                      {aiAnalysis.playbook.never.map((rule, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="text-[11px] mt-0.5 shrink-0" style={{ color: C.red }}>•</span>
+                          <span className="text-[13px] leading-snug" style={{ color: C.sub }}>{rule}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }} className="pt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] mb-3" style={{ color: C.muted }}>Optimal Specs</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      aiAnalysis.playbook.optimalSpecs.duration,
+                      `${aiAnalysis.playbook.optimalSpecs.words} words`,
+                      aiAnalysis.playbook.optimalSpecs.postTime,
+                      `${aiAnalysis.playbook.optimalSpecs.listItems} list items`,
+                    ].map(spec => (
+                      <span
+                        key={spec}
+                        className="text-[12px] font-semibold px-3 py-1 rounded-full"
+                        style={{
+                          background: "rgba(16,185,129,0.12)",
+                          color: C.green,
+                          border: "1px solid rgba(16,185,129,0.28)",
+                        }}
+                      >
+                        {spec}
                       </span>
                     ))}
                   </div>
+                </div>
+                  </>
                 )}
               </>
             ) : (
-              <div className="h-40 flex flex-col items-center justify-center gap-2">
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-base"
-                  style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-6 h-6" style={{ color: "#6B6B80" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                </div>
-                <p className="text-sm" style={{ color: "#6B6B80" }}>
-                  Connect accounts to see performance
+              <div>
+                <p className="text-[12px] mb-4" style={{ color: C.muted }}>
+                  {allPosts.length < 3 ? "Connect & sync your accounts to generate your playbook" : "Analyzing your posts…"}
                 </p>
+                <Skeleton />
               </div>
             )}
           </div>
+        </section>
 
-          {/* ── Top Content + Quick Actions ───────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Top Content */}
-            <div className="lg:col-span-2 p-5" style={GLASS_CARD}>
-              <span
-                className="text-sm font-semibold"
-                style={{ color: "#E8E8F0" }}
-              >
-                Top Content
+        <Divider />
+
+        {/* ── SIMULATED IDEAS ─────────────────────────────────────────────── */}
+        <section className="py-7">
+          <div className="flex items-center justify-between mb-0">
+            <Label>Simulated Ideas — Ranked</Label>
+            {isRefreshing && (
+              <span className="text-[11px] font-medium animate-pulse" style={{ color: "#A78BFA" }}>
+                ✦ Updating…
               </span>
-
-              {hasData && effectiveTopContent.length > 0 ? (
-                <div className="mt-4">
-                  {effectiveTopContent.slice(0, 4).map((item, i) => {
-                    const views =
-                      item.metrics?.views ??
-                      item.metrics?.impressions ??
-                      item.metrics?.reach ??
-                      0;
-                    const title =
-                      (item.caption ?? "Untitled").slice(0, 52) ||
-                      "Untitled";
+            )}
+          </div>
+          {aiAnalysis ? (
+            <div style={{ ...TABLE_SURFACE, opacity: isRefreshing ? 0.5 : 1, transition: "opacity 0.3s" }} className="mt-3">
+              <table className="w-full">
+                <thead>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                    {["#", "CONTENT IDEA", "VIEWS", "ENG%", "FOLLOWERS", "SIGNAL"].map(h => (
+                      <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.muted }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiAnalysis.simulatedIdeas.map((idea, i) => {
+                    const sig =
+                      idea.signal === "POST"
+                        ? { bg: "rgba(16,185,129,0.15)", c: C.green, b: "rgba(16,185,129,0.32)" }
+                        : idea.signal === "TEST"
+                        ? { bg: "rgba(245,158,11,0.15)", c: C.amber, b: "rgba(245,158,11,0.32)" }
+                        : { bg: "rgba(255,255,255,0.07)", c: C.muted, b: "rgba(255,255,255,0.12)" };
                     return (
-                      <div
-                        key={item.id ?? i}
-                        className="flex items-center gap-3 py-3"
-                        style={{
-                          borderBottom:
-                            i < 3
-                              ? "1px solid rgba(255,255,255,0.05)"
-                              : "none",
-                        }}
+                      <tr
+                        key={i}
+                        style={{ borderBottom: i < aiAnalysis.simulatedIdeas.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}
                       >
-                        <div
-                          className="w-9 h-9 rounded-lg shrink-0"
-                          style={{
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.08)",
-                          }}
-                        />
-                        <p
-                          className="flex-1 text-sm truncate"
-                          style={{ color: "#9898B0" }}
-                        >
-                          {title}
-                        </p>
-                        <span
-                          className="text-xs shrink-0"
-                          style={{ color: "#6B6B80" }}
-                        >
-                          {formatNumber(views)} views
-                        </span>
-                      </div>
+                        <td className="px-4 py-3 text-[13px] tabular-nums font-medium" style={{ color: C.muted }}>{String(i + 1).padStart(2, "0")}</td>
+                        <td className="px-4 py-3">
+                          <p className="text-[13px] font-medium mb-1.5" style={{ color: C.text }}>{idea.title}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {[idea.format, idea.duration, idea.confidence].map(tag => (
+                              <span
+                                key={tag}
+                                className="text-[10px] px-1.5 py-0.5 rounded"
+                                style={{ background: "rgba(255,255,255,0.07)", color: C.muted, border: "1px solid rgba(255,255,255,0.10)" }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-[13px] whitespace-nowrap" style={{ color: C.sub }}>{fmtRange(idea.viewsMin, idea.viewsMax)}</td>
+                        <td className="px-4 py-3 tabular-nums text-[13px] whitespace-nowrap" style={{ color: C.sub }}>{idea.engMin.toFixed(1)}–{idea.engMax.toFixed(1)}%</td>
+                        <td className="px-4 py-3 tabular-nums text-[13px] whitespace-nowrap" style={{ color: C.sub }}>+{fmtRange(idea.followersMin, idea.followersMax)}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide"
+                            style={{ background: sig.bg, color: sig.c, border: `1px solid ${sig.b}` }}
+                          >
+                            {idea.signal}
+                          </span>
+                        </td>
+                      </tr>
                     );
                   })}
-                </div>
-              ) : (
-                <div className="mt-4">
-                  {[70, 55, 65, 45].map((w, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 py-3 animate-pulse"
-                      style={{
-                        borderBottom:
-                          i < 3
-                            ? "1px solid rgba(255,255,255,0.04)"
-                            : "none",
-                      }}
-                    >
-                      <div
-                        className="w-9 h-9 rounded-lg shrink-0"
-                        style={{
-                          background: "rgba(255,255,255,0.06)",
-                        }}
-                      />
-                      <div
-                        className="h-3 rounded flex-1"
-                        style={{
-                          maxWidth: `${w}%`,
-                          background: "rgba(255,255,255,0.06)",
-                        }}
-                      />
-                      <div
-                        className="h-3 w-14 rounded shrink-0"
-                        style={{
-                          background: "rgba(255,255,255,0.06)",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
+                </tbody>
+              </table>
             </div>
+          ) : (
+            <div style={CARD} className="mt-3 p-5">
+              <p className="text-[12px] mb-4" style={{ color: C.muted }}>
+                {allPosts.length < 3 ? "Sync your accounts to generate content ideas" : "Generating ideas…"}
+              </p>
+              <Skeleton />
+            </div>
+          )}
+        </section>
 
-            {/* Quick Actions */}
-            <div className="p-5" style={GLASS_CARD}>
-              <span
-                className="text-sm font-semibold"
-                style={{ color: "#E8E8F0" }}
-              >
-                Quick Actions
+        <Divider />
+
+        {/* ── CONTENT CALENDAR ────────────────────────────────────────────── */}
+        <section className="py-7">
+          <div className="flex items-center justify-between mb-0">
+            <Label>Content Calendar</Label>
+            {isRefreshing && (
+              <span className="text-[11px] font-medium animate-pulse" style={{ color: "#A78BFA" }}>
+                ✦ Updating…
               </span>
-              <div className="mt-3 space-y-0.5">
-                <Link
-                  href="/dashboard/accounts"
-                  className="flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150"
-                  style={{ color: "#9898B0" }}
-                  onMouseEnter={(e) => {
-                    (
-                      e.currentTarget as HTMLAnchorElement
-                    ).style.background = "rgba(255,255,255,0.05)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (
-                      e.currentTarget as HTMLAnchorElement
-                    ).style.background = "transparent";
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 shrink-0" style={{ color: "#9898B0" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                  <div>
-                    <p
-                      className="text-sm font-medium"
-                      style={{ color: "#E8E8F0" }}
-                    >
-                      Connect Accounts
-                    </p>
-                    <p className="text-xs" style={{ color: "#6B6B80" }}>
-                      Link your social media
-                    </p>
-                  </div>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => router.push("/dashboard/chat")}
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150 text-left"
-                  onMouseEnter={(e) => {
-                    (
-                      e.currentTarget as HTMLButtonElement
-                    ).style.background = "rgba(255,255,255,0.05)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (
-                      e.currentTarget as HTMLButtonElement
-                    ).style.background = "transparent";
-                  }}
-                >
-                  <span className="text-sm" style={{ color: "#A78BFA" }}>
-                    ✦
-                  </span>
-                  <div>
-                    <p
-                      className="text-sm font-medium"
-                      style={{ color: "#A78BFA" }}
-                    >
-                      Ask AI
-                    </p>
-                    <p className="text-xs" style={{ color: "#6B6B80" }}>
-                      Get instant strategy advice
-                    </p>
-                  </div>
-                </button>
-                <Link
-                  href="/dashboard/marketing-plan"
-                  className="flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150"
-                  onMouseEnter={(e) => {
-                    (
-                      e.currentTarget as HTMLAnchorElement
-                    ).style.background = "rgba(255,255,255,0.05)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (
-                      e.currentTarget as HTMLAnchorElement
-                    ).style.background = "transparent";
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 shrink-0" style={{ color: "#9898B0" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                  <div>
-                    <p
-                      className="text-sm font-medium"
-                      style={{ color: "#E8E8F0" }}
-                    >
-                      Marketing Plan
-                    </p>
-                    <p className="text-xs" style={{ color: "#6B6B80" }}>
-                      View your AI strategy
-                    </p>
-                  </div>
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Recent Activity ───────────────────────────────────────────── */}
-          <div className="p-5" style={GLASS_CARD}>
-            <span
-              className="text-sm font-semibold"
-              style={{ color: "#E8E8F0" }}
-            >
-              Recent Activity
-            </span>
-
-            {hasData && effectiveActivity.length > 0 ? (
-              <div className="mt-4">
-                {effectiveActivity.slice(0, 5).map((item, i) => (
-                  <div
-                    key={item.id ?? i}
-                    className="flex items-center gap-3 py-3"
-                    style={{
-                      borderBottom:
-                        i < Math.min(effectiveActivity.length, 5) - 1
-                          ? "1px solid rgba(255,255,255,0.05)"
-                          : "none",
-                    }}
-                  >
-                    <div
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: "rgba(255,255,255,0.20)" }}
-                    />
-                    <p
-                      className="flex-1 text-sm min-w-0"
-                      style={{ color: "#9898B0" }}
-                    >
-                      {item.description}
-                    </p>
-                    <span
-                      className="text-xs shrink-0"
-                      style={{ color: "#6B6B80" }}
-                    >
-                      {formatRelativeTime(item.created_at)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4">
-                {[80, 65, 72].map((w, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 py-3 animate-pulse"
-                    style={{
-                      borderBottom:
-                        i < 2
-                          ? "1px solid rgba(255,255,255,0.04)"
-                          : "none",
-                    }}
-                  >
-                    <div
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: "rgba(255,255,255,0.10)" }}
-                    />
-                    <div
-                      className="h-3 rounded flex-1"
-                      style={{
-                        maxWidth: `${w}%`,
-                        background: "rgba(255,255,255,0.06)",
-                      }}
-                    />
-                    <div
-                      className="h-3 w-12 rounded shrink-0"
-                      style={{
-                        background: "rgba(255,255,255,0.06)",
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
             )}
           </div>
-        </div>
+          {aiAnalysis && aiAnalysis.weeklyCalendar.length > 0 ? (
+            <div style={{ ...CARD, opacity: isRefreshing ? 0.5 : 1, transition: "opacity 0.3s" }} className="mt-3 overflow-hidden">
+              <div
+                className="flex items-center justify-between px-5 py-3"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+              >
+                <p className="text-[12px] font-semibold" style={{ color: C.sub }}>
+                  WEEK — {aiAnalysis.weeklyCalendar[0]?.date} → {aiAnalysis.weeklyCalendar[aiAnalysis.weeklyCalendar.length - 1]?.date}
+                </p>
+              </div>
+              <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                {aiAnalysis.weeklyCalendar.map((day, i) => {
+                  const sc =
+                    day.status === "BEST"
+                      ? { bg: "rgba(124,92,252,0.20)", c: "#C4B5FD", b: "rgba(124,92,252,0.40)" }
+                      : day.status === "POST"
+                      ? { bg: "rgba(16,185,129,0.15)", c: C.green, b: "rgba(16,185,129,0.32)" }
+                      : day.status === "TEST"
+                      ? { bg: "rgba(245,158,11,0.15)", c: C.amber, b: "rgba(245,158,11,0.32)" }
+                      : { bg: "rgba(255,255,255,0.07)", c: C.muted, b: "rgba(255,255,255,0.12)" };
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 px-5 py-3"
+                      style={{ borderBottom: i < aiAnalysis.weeklyCalendar.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}
+                    >
+                      <div className="w-16 shrink-0">
+                        <p className="text-[11px] font-bold" style={{ color: C.sub }}>{day.day}</p>
+                        <p className="text-[10px]" style={{ color: C.muted }}>{day.date}</p>
+                      </div>
+                      <p className="flex-1 text-[13px] truncate" style={{ color: day.status === "REST" ? C.muted : C.sub }}>{day.title}</p>
+                      {day.status !== "REST" && (
+                        <p className="text-[12px] tabular-nums shrink-0" style={{ color: C.muted }}>
+                          {fmtRange(day.viewsMin, day.viewsMax)}
+                        </p>
+                      )}
+                      <span
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 tracking-wide"
+                        style={{ background: sc.bg, color: sc.c, border: `1px solid ${sc.b}` }}
+                      >
+                        {day.status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={CARD} className="mt-3 p-5">
+              <p className="text-[12px] mb-4" style={{ color: C.muted }}>
+                {allPosts.length < 3 ? "Sync your accounts to generate a content calendar" : "Generating calendar…"}
+              </p>
+              <Skeleton />
+            </div>
+          )}
+        </section>
 
-        {/* ── Floating Chat Bar ─────────────────────────────────────────────── */}
-        <div
-          className="fixed bottom-5 z-50 cursor-pointer"
-          style={FLOATING_BAR}
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push("/dashboard/chat")}
-          onKeyDown={(e) =>
-            (e.key === "Enter" || e.key === " ") &&
-            router.push("/dashboard/chat")
-          }
-        >
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span className="text-sm" style={{ color: "#A78BFA" }}>
-              ✦
-            </span>
-            <span className="flex-1 text-sm" style={{ color: "#6B6B80" }}>
-              Ask your AI strategist...
-            </span>
-            <span
-              className="text-[11px] px-2 py-0.5 rounded-md"
-              style={{
-                color: "#6B6B80",
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              ⌘K
-            </span>
-          </div>
-        </div>
       </div>
-    </PageTransition>
+    </div>
   );
 }

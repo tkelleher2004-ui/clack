@@ -3,26 +3,56 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
-export async function signUpWithEmail(formData: FormData) {
-  const supabase = await createClient();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+function getAuthErrorRedirectMessage(err: unknown): string {
+  if (err instanceof Error) {
+    const causeCode =
+      typeof (err as Error & { cause?: { code?: string } }).cause?.code === "string"
+        ? (err as Error & { cause?: { code?: string } }).cause?.code
+        : undefined;
 
-  const { error } = await supabase.auth.signUp({ email, password });
-  if (error) {
-    redirect(`/signup?error=${encodeURIComponent(error.message)}`);
+    if (
+      err.message.toLowerCase().includes("fetch failed") ||
+      causeCode === "ENOTFOUND" ||
+      causeCode === "ECONNREFUSED" ||
+      causeCode === "ETIMEDOUT"
+    ) {
+      return "Cannot reach Supabase auth. Check NEXT_PUBLIC_SUPABASE_URL and your network, then restart dev server.";
+    }
+
+    return err.message;
+  }
+
+  return "Sign in failed. Please try again.";
+}
+
+export async function signUpWithEmail(formData: FormData) {
+  try {
+    const supabase = await createClient();
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      redirect(`/signup?error=${encodeURIComponent(error.message)}`);
+    }
+  } catch (err) {
+    redirect(`/signup?error=${encodeURIComponent(getAuthErrorRedirectMessage(err))}`);
   }
   redirect("/login?message=Check your email to confirm your account.");
 }
 
 export async function signInWithEmail(formData: FormData) {
-  const supabase = await createClient();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  try {
+    const supabase = await createClient();
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    }
+  } catch (err) {
+    redirect(`/login?error=${encodeURIComponent(getAuthErrorRedirectMessage(err))}`);
   }
   redirect("/dashboard");
 }

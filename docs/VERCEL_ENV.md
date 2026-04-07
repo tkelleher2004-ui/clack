@@ -16,6 +16,7 @@ Add these in **Vercel → Project → Settings → Environment Variables**. `.en
 |----------|----------|
 | `TIKTOK_CLIENT_KEY` | TikTok OAuth client key |
 | `TIKTOK_CLIENT_SECRET` | TikTok OAuth client secret |
+| `SOCIAL_TOKENS_ENCRYPTION_KEY` | Encrypts tokens (min 32 chars). Required for TikTok connect. |
 
 ## For Instagram connect + sync
 
@@ -34,7 +35,7 @@ Add these in **Vercel → Project → Settings → Environment Variables**. `.en
 
 | Variable | Used for |
 |----------|----------|
-| `NEXT_PUBLIC_APP_URL` | OAuth redirect base (useclack.com works via request origin without this) |
+| `NEXT_PUBLIC_APP_URL` | **TikTok OAuth:** Must match TikTok app redirect URI exactly (e.g. `https://www.useclack.com`). Fixes `server_error` / token exchange failures from www vs non-www mismatch. |
 | `SOCIAL_OAUTH_STATE_SECRET` | OAuth state signing (falls back to anon key) |
 | `SOCIAL_TOKENS_ENCRYPTION_KEY` | If using encrypted tokens |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | YouTube OAuth |

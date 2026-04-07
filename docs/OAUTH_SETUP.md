@@ -39,6 +39,16 @@ TIKTOK_CLIENT_KEY=your_client_key_here
 TIKTOK_CLIENT_SECRET=your_client_secret_here
 ```
 
+### Sandbox: Video list returns empty / internal_error
+
+1. **Add Display API to your sandbox** – Video list is part of the **Display API** product. In your app → Sandbox → Products, ensure **Display API** is added (not just Login Kit).
+
+2. **Add target users** – Sandbox only returns video data for TikTok accounts in the Target users list. Add your test account under Sandbox → Target users → Add account. Wait up to an hour for it to take effect.
+
+3. **Scopes** – The sandbox must include `video.list` in its allowed scopes. Check Sandbox → Products → Display API → Scopes.
+
+4. **Retries** – The sync route retries up to 3 times on `internal_error`; TikTok’s API can be flaky. If it still fails after retries, contact [TikTok Developer Support](https://developers.tiktok.com/support) with the `log_id` from the error response.
+
 ---
 
 ## 2. Instagram (Meta)

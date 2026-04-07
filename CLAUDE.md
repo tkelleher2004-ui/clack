@@ -45,53 +45,57 @@ lib/
   utils.ts            # General utilities
 ```
 
-## Design System: "Dark Liquid Glass"
+## Design System: "White Floating Glass"
 
 ### Philosophy
-Glassmorphism on structural/navigation elements (20-30% of UI). Solid surfaces for content. Glass should feel premium, not cheap.
+Light/white background with frosted glass cards. Cards and buttons use a gradient border (bright white at top, fading to near-black at bottom) to create a premium floating effect with depth. The interior is semi-transparent white with blur.
 
 ### Background
-NEVER pure black. Use rich dark with subtle colored blobs:
+Soft lavender base with subtle color blobs (visionOS-style):
 ```css
-/* Page background */
-background: #0C0C14;
-/* Add 2-3 radial gradient blobs behind content */
-/* Blob 1: */ radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%)
-/* Blob 2: */ radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.06) 0%, transparent 50%)
-/* Blob 3: */ radial-gradient(ellipse at 50% 80%, rgba(6, 182, 212, 0.04) 0%, transparent 50%)
+background:
+  radial-gradient(ellipse at 15% 25%, rgba(124,92,252,0.10) 0%, transparent 52%),
+  radial-gradient(ellipse at 85% 12%, rgba(99,102,241,0.08) 0%, transparent 48%),
+  radial-gradient(ellipse at 58% 88%, rgba(168,85,247,0.07) 0%, transparent 48%),
+  radial-gradient(ellipse at 92% 72%, rgba(6,182,212,0.05) 0%, transparent 42%),
+  #ECE8F5;
 ```
 
-### Glass Card (for nav, sidebar, KPI cards, modals):
+### Card / Button Style (the primary pattern for ALL cards, modals, KPI tiles, platform cards):
 ```css
-background: rgba(255, 255, 255, 0.06);
-backdrop-filter: blur(12px) saturate(180%);
--webkit-backdrop-filter: blur(12px) saturate(180%);
-border: 1px solid rgba(255, 255, 255, 0.08);
-border-radius: 16px;
-box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+/* Interior background + gradient border in one declaration */
+background:
+  linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0)) padding-box,
+  linear-gradient(180deg, rgba(255,255,255,0.90) 0%, rgba(220,220,220,0.50) 35%, rgba(140,140,140,0.30) 65%, rgba(0,0,0,0.18) 100%) border-box;
+border: 1px solid transparent;
+backdrop-filter: blur(20px) saturate(140%);
+-webkit-backdrop-filter: blur(20px) saturate(140%);
+border-radius: 20px;
+box-shadow: 0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.05);
 ```
 
-### Glass Nav/Sidebar (heavier):
+### Sidebar / Nav (heavier, less transparent):
 ```css
-background: rgba(12, 12, 20, 0.75);
-backdrop-filter: blur(16px) saturate(180%);
-border-right: 1px solid rgba(255, 255, 255, 0.06);
+background: rgba(248,248,250,0.88);
+backdrop-filter: blur(24px) saturate(140%);
+border-right: 1px solid rgba(0,0,0,0.07);
 ```
 
-### Solid Surface (for content areas, inputs, data tables):
+### Solid Surface (for data tables, list rows):
 ```css
-background: rgba(255, 255, 255, 0.03);
-border: 1px solid rgba(255, 255, 255, 0.06);
+background: rgba(255,255,255,0.55);
+border: 1px solid rgba(0,0,0,0.06);
 border-radius: 12px;
-/* NO backdrop-filter on content */
+/* NO backdrop-filter */
 ```
 
 ### Input Fields:
 ```css
-background: rgba(255, 255, 255, 0.06);
-border: 1px solid rgba(255, 255, 255, 0.08);
+background: rgba(0,0,0,0.04);
+border: 1px solid rgba(0,0,0,0.07);
 border-radius: 12px;
-/* NO backdrop-filter — must be readable */
+color: #111118;
+/* NO backdrop-filter */
 ```
 
 ### Buttons:
@@ -101,37 +105,37 @@ background: #7C5CFC;
 border-radius: 12px;
 box-shadow: 0 4px 16px rgba(124, 92, 252, 0.3);
 
-/* Secondary — subtle glass */
-background: rgba(255, 255, 255, 0.06);
-border: 1px solid rgba(255, 255, 255, 0.10);
+/* Secondary — subtle */
+background: rgba(0,0,0,0.04);
+border: 1px solid rgba(0,0,0,0.08);
 ```
 
 ### Colors:
 ```
-Background:       #0C0C14
-Surface:          rgba(255,255,255,0.06) with blur
-Surface solid:    rgba(255,255,255,0.03) no blur
-Border:           rgba(255,255,255,0.08)
-Border hover:     rgba(255,255,255,0.15)
-Text primary:     #E8E8F0
-Text secondary:   #9898B0
-Text muted:       #6B6B80
+Background:       #E8E8E8
+Surface:          rgba(255,255,255,0.78) with blur + gradient border
+Surface solid:    rgba(255,255,255,0.55) no blur
+Border:           rgba(0,0,0,0.06)
+Border hover:     rgba(0,0,0,0.12)
+Text primary:     #111118
+Text secondary:   #505060
+Text muted:       #8A8A9A
+Text faint:       #AAAABB
 Purple (brand):   #7C5CFC
-Purple light:     #A78BFA
-Green:            #81C784
-Amber:            #FFB74D
-Red:              #E57373
-Chart grid:       rgba(255,255,255,0.04)
+Green:            #16A34A
+Amber:            #D97706
+Red:              #DC2626
+Chart grid:       rgba(0,0,0,0.05)
 ```
 
 ### Glass Rules:
-- ✅ Use glass on: sidebar, nav, KPI stat cards, modals, floating chat bar, dropdowns
-- ❌ NEVER glass on: inputs, buttons, data tables, long text, list items, chart content
+- ✅ Use card/glass style on: sidebar, nav, KPI stat cards, modals, floating panels, dropdowns, platform cards
+- ❌ NEVER glass on: inputs, primary buttons, data tables, long text, list items, chart content
 - ❌ NEVER stack more than 2 glass layers
 - ❌ NEVER use bg-gray-* — always use rgba() or hex values from this system
-- ✅ Always add `saturate(180%)` alongside blur for richness in dark mode
-- ✅ Use gradient borders (lighter on top edge) for premium feel
-- ✅ Keep backgrounds dark but NOT pure black — always #0C0C14 or similar with color blobs
+- ✅ Gradient border goes from white (top) to near-black (bottom) — this is the KEY visual element
+- ✅ Always include box-shadow below cards for depth
+- ✅ Keep page background at #E8E8E8 (light gray, not pure white)
 
 ## AI Chat Architecture
 - Chat is the PRIMARY interface — `/dashboard` redirects to `/dashboard/chat`

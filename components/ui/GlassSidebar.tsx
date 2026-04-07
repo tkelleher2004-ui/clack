@@ -59,8 +59,10 @@ export function GlassSidebar({
       className={`h-full flex flex-col overflow-visible group ${className}`}
       style={{
         width,
-        background: "#0A0A0B",
-        borderRight: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(236,232,245,0.65)",
+        backdropFilter: "blur(24px) saturate(140%)",
+        WebkitBackdropFilter: "blur(24px) saturate(140%)",
+        borderRight: "1px solid rgba(0,0,0,0.07)",
         transition: "width 150ms ease-out",
       }}
       onMouseEnter={() => expandOnHover && setIsHovered(true)}
@@ -71,7 +73,8 @@ export function GlassSidebar({
           <button
             type="button"
             onClick={onToggle}
-            className="flex items-center justify-center h-12 shrink-0 transition-colors duration-150 text-zinc-500 hover:text-zinc-400"
+            className="flex items-center justify-center h-12 shrink-0 transition-colors duration-150"
+            style={{ color: "#8A8A9A" }}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <svg
@@ -90,9 +93,7 @@ export function GlassSidebar({
             const isActive =
               item.href === "/dashboard/overview"
                 ? pathname === "/dashboard/overview" || pathname.startsWith("/dashboard/overview/")
-                : item.href === "/dashboard/chat"
-                  ? pathname === "/dashboard" || pathname === "/dashboard/chat"
-                  : pathname === item.href || pathname.startsWith(item.href + "/");
+                : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
@@ -102,19 +103,19 @@ export function GlassSidebar({
                 style={{
                   padding: "8px",
                   borderRadius: "8px",
-                  background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
-                  color: isActive ? "#F4F4F5" : "#71717A",
+                  background: isActive ? "rgba(0,0,0,0.07)" : "transparent",
+                  color: isActive ? "#111118" : "#8A8A9A",
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
-                    e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-                    e.currentTarget.style.color = "#A1A1AA";
+                    e.currentTarget.style.background = "rgba(0,0,0,0.04)";
+                    e.currentTarget.style.color = "#505060";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "#71717A";
+                    e.currentTarget.style.color = "#8A8A9A";
                   }
                 }}
               >
@@ -135,10 +136,10 @@ export function GlassSidebar({
         {/* Pinned Artifacts */}
         <div
           className="shrink-0 py-3"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: "12px", marginBottom: "12px" }}
+          style={{ borderTop: "1px solid rgba(0,0,0,0.06)", marginTop: "12px", marginBottom: "12px" }}
         >
           {expanded && (
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest px-2 mb-2">PINNED</p>
+            <p className="text-[10px] uppercase tracking-widest px-2 mb-2" style={{ color: "#AAAABB" }}>PINNED</p>
           )}
           {pinnedItems.length > 0 ? (
             <div className="space-y-0.5">
@@ -147,8 +148,8 @@ export function GlassSidebar({
                   key={i}
                   href={item.href ?? "#"}
                   onClick={onLinkClick}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all duration-150 text-[12px] text-zinc-500 hover:text-zinc-300"
-                  style={{ padding: expanded ? "6px 8px" : "4px" }}
+                  className="flex items-center gap-2 rounded-lg transition-all duration-150 text-[12px]"
+                  style={{ color: "#8A8A9A", padding: expanded ? "6px 8px" : "4px" }}
                 >
                   <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: item.color }} />
                   {expanded && <span className="truncate">{item.title}</span>}
@@ -157,13 +158,13 @@ export function GlassSidebar({
             </div>
           ) : (
             expanded && (
-              <p className="text-[11px] text-zinc-700 italic px-2">AI reports will appear here</p>
+              <p className="text-[11px] italic px-2" style={{ color: "#AAAABB" }}>AI reports will appear here</p>
             )
           )}
         </div>
 
         {footer && (
-          <div className="shrink-0 p-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="shrink-0 p-3" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
             {typeof footer === "function" ? footer(expanded) : footer}
           </div>
         )}

@@ -173,6 +173,22 @@ export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, di
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(initialAiAnalysis);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [postedIdeas, setPostedIdeas] = useState<Set<number>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const saved = localStorage.getItem("clack_posted_ideas");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  const togglePosted = (index: number) => {
+    setPostedIdeas(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      try { localStorage.setItem("clack_posted_ideas", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
 
   const { refreshSignal, consumeRefresh, setChatContext } = useUserGoal();
   const prevSignalRef = useRef(refreshSignal);
@@ -917,8 +933,8 @@ export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, di
               <table className="w-full">
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                    {["#", "CONTENT IDEA", "VIEWS", "ENG%", "FOLLOWERS", "SIGNAL"].map(h => (
-                      <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.muted }}>
+                    {["#", "CONTENT IDEA", "VIEWS", "ENG%", "FOLLOWERS", "SIGNAL", ""].map((h, idx) => (
+                      <th key={idx} className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.muted }}>
                         {h}
                       </th>
                     ))}
@@ -926,6 +942,7 @@ export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, di
                 </thead>
                 <tbody>
                   {aiAnalysis.simulatedIdeas.map((idea, i) => {
+                    const isPosted = postedIdeas.has(i);
                     const sig =
                       idea.signal === "POST"
                         ? { bg: "rgba(16,185,129,0.15)", c: C.green, b: "rgba(16,185,129,0.32)" }
@@ -935,11 +952,15 @@ export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, di
                     return (
                       <tr
                         key={i}
-                        style={{ borderBottom: i < aiAnalysis.simulatedIdeas.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}
+                        style={{
+                          borderBottom: i < aiAnalysis.simulatedIdeas.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                          opacity: isPosted ? 0.45 : 1,
+                          transition: "opacity 0.2s",
+                        }}
                       >
                         <td className="px-4 py-3 text-[13px] tabular-nums font-medium" style={{ color: C.muted }}>{String(i + 1).padStart(2, "0")}</td>
                         <td className="px-4 py-3">
-                          <p className="text-[13px] font-medium mb-1.5" style={{ color: C.text }}>{idea.title}</p>
+                          <p className="text-[13px] font-medium mb-1.5" style={{ color: C.text, textDecoration: isPosted ? "line-through" : "none" }}>{idea.title}</p>
                           <div className="flex flex-wrap gap-1">
                             {[idea.format, idea.duration, idea.confidence].map(tag => (
                               <span
@@ -950,6 +971,14 @@ export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, di
                                 {tag}
                               </span>
                             ))}
+                            {isPosted && (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                                style={{ background: "rgba(16,185,129,0.15)", color: C.green, border: "1px solid rgba(16,185,129,0.25)" }}
+                              >
+                                Posted
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 tabular-nums text-[13px] whitespace-nowrap" style={{ color: C.sub }}>{fmtRange(idea.viewsMin, idea.viewsMax)}</td>
@@ -962,6 +991,23 @@ export function OverviewClient({ overviewData, aiAnalysis: initialAiAnalysis, di
                           >
                             {idea.signal}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => togglePosted(i)}
+                            className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors duration-150"
+                            style={{
+                              background: isPosted ? "rgba(16,185,129,0.15)" : "rgba(255,255,255,0.05)",
+                              border: isPosted ? "1px solid rgba(16,185,129,0.30)" : "1px solid rgba(255,255,255,0.10)",
+                              color: isPosted ? C.green : C.muted,
+                            }}
+                            title={isPosted ? "Mark as not posted" : "Mark as posted"}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
                         </td>
                       </tr>
                     );

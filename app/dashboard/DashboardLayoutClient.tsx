@@ -97,6 +97,7 @@ export function DashboardLayoutClient({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
 
   useEffect(() => {
     createClient()
@@ -305,15 +306,15 @@ export function DashboardLayoutClient({
 
         {/* Main content area */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* Top bar with sync indicator */}
+          {/* Top bar with goal bar inline + sync + AI toggle */}
           <div
-            className="shrink-0 flex items-center justify-between px-4 py-2 min-h-[44px]"
+            className="shrink-0 flex items-center px-4 py-2 min-h-[44px] gap-2"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
           >
             {/* Mobile hamburger */}
             <button
               type="button"
-              className="md:hidden p-1.5 rounded-lg"
+              className="md:hidden p-1.5 rounded-lg shrink-0"
               style={{ color: "#5A5A78" }}
               onClick={() => setMobileSidebarOpen(true)}
               aria-label="Open menu"
@@ -322,9 +323,14 @@ export function DashboardLayoutClient({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <div className="hidden md:block" />
 
-            <div className="flex items-center gap-2">
+            {/* Goal bar inline */}
+            <div className="flex-1 min-w-0">
+              <GoalBar />
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <SyncIndicator />
               {/* Mobile chat toggle */}
               <button
                 type="button"
@@ -337,13 +343,29 @@ export function DashboardLayoutClient({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                 </svg>
               </button>
-              {/* Sync indicator in the top bar */}
-              <SyncIndicator />
+              {/* Desktop AI toggle */}
+              <button
+                type="button"
+                className="hidden md:flex items-center justify-center p-1.5 rounded-lg transition-colors duration-150"
+                style={{
+                  color: chatOpen ? "#A78BFA" : "#5A5A78",
+                  background: chatOpen ? "rgba(124,92,252,0.12)" : "transparent",
+                }}
+                onClick={() => setChatOpen((o) => !o)}
+                aria-label={chatOpen ? "Close AI assistant" : "Open AI assistant"}
+                onMouseEnter={(e) => {
+                  if (!chatOpen) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!chatOpen) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                }}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+              </button>
             </div>
           </div>
-
-          {/* Goal bar */}
-          <GoalBar />
 
           {/* Page content */}
           <main className="flex-1 overflow-auto relative">
@@ -352,9 +374,11 @@ export function DashboardLayoutClient({
         </div>
 
         {/* Persistent AI chat panel — sidebar on desktop, overlay on mobile */}
-        <div className="hidden md:flex" style={{ width: "40vw", minWidth: "40vw" }}>
-          <ChatSidebar />
-        </div>
+        {chatOpen && (
+          <div className="hidden md:flex" style={{ width: "40vw", minWidth: "40vw" }}>
+            <ChatSidebar />
+          </div>
+        )}
         {mobileChatOpen && (
           <>
             <div

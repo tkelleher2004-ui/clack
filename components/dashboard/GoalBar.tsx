@@ -61,8 +61,7 @@ export function GoalBar() {
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2 min-h-[40px]"
-      style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+      className="flex items-center gap-3"
     >
       {/* Goal type pill */}
       <div className="relative">
